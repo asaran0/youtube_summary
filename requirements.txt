@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────
+# requirements.txt — Hindi YouTube Video Summarizer
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# On macOS M1 (Apple Silicon) run first:
+#   pip install --upgrade pip
+# ─────────────────────────────────────────────────────────────
+
+# ── Video download ────────────────────────────────────────────
+yt-dlp>=2024.1.1
+
+# ── Audio transcription (runs locally, no API key needed) ────
+openai-whisper>=20231117
+
+# ── Deep learning backend (Whisper uses PyTorch) ─────────────
+# For M1 Mac: torch will automatically use MPS (Metal GPU)
+torch>=2.1.0
+
+# ── Video editing ─────────────────────────────────────────────
+moviepy>=1.0.3
+
+# ── Image / banner generation ────────────────────────────────
+Pillow>=10.0.0
+
+# ── Numerics (used by moviepy, numpy arrays for banners) ─────
+numpy>=1.24.0
+
+# ── Progress bars (used by yt-dlp and whisper internally) ────
+tqdm>=4.65.0
+
+# ── ffmpeg Python bindings (optional, used as fallback) ──────
+ffmpeg-python>=0.2.0
+
+# ─────────────────────────────────────────────────────────────
+# System dependency (NOT pip-installed):
+#   brew install ffmpeg
+#
+# ffmpeg must be available on PATH before running the project.
+# ─────────────────────────────────────────────────────────────
