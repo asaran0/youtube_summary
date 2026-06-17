@@ -18,7 +18,8 @@ WHISPER_MODEL = "medium"
 
 # Output language. Supported values: "hi" and "en".
 # "hi" transcribes Hindi. "en" uses Whisper translate mode for English output.
-LANGUAGE = "hi"
+# LANGUAGE = "hi"
+LANGUAGE = "en"
 
 # ─────────────────────────────────────────────────────────────
 #  NARRATION / TTS
@@ -26,7 +27,8 @@ LANGUAGE = "hi"
 # "macos" supports configurable installed system voices.
 # "mms" is neural/offline after model download, but has one voice per language.
 TTS_BACKEND = "macos"
-MACOS_TTS_VOICE = "Lekha"       # Hindi: Lekha. English examples: Samantha, Daniel
+# MACOS_TTS_VOICE = "Lekha"       # Hindi: Lekha. English examples: Samantha, Daniel
+MACOS_TTS_VOICE = "Daniel"       # Hindi: Lekha. English examples: Samantha, Daniel
 MACOS_TTS_VOICES = {
     "hi": "Lekha",
     "en": "Samantha",
@@ -60,7 +62,7 @@ MMS_TTS_MODEL_IDS = {
 # Default creates a new slideshow video instead of reusing YouTube frames.
 VIDEO_STYLE = "slideshow"       # "slideshow" (recommended) or "source"
 DOWNLOAD_SOURCE_VIDEO = False   # audio-only is faster for slideshow mode
-OUTPUT_FORMAT = "auto"          # "auto", "youtube", or "reel"
+OUTPUT_FORMAT = "reel"          # "auto", "youtube", or "reel"
 
 # Put one or more copyright-safe images here, or a folder in BACKGROUND_DIR.
 # If empty, the app generates simple original image backgrounds.
