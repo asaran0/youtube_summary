@@ -618,14 +618,26 @@ def _concat_with_ffmpeg(
 
 
 def _retime_chunks_for_tts(chunks: list[dict], timings: list) -> None:
-    """Replace original-video timings with generated narration timings."""
+    """
+    Replace original-video timings with generated narration timings.
+
+    If a chunk has is_answer=True (Q&A interview mode), an extra pause
+    is inserted before it so the question fully lands before the
+    answer begins.
+    """
     current = 0.0
     pause = config.TTS_PAUSE_BETWEEN_SEGMENTS
+    answer_pause_extra = getattr(config, "TTS_ANSWER_PAUSE_EXTRA", 0.6)
     timing_iter = iter(timings)
 
     for chunk in chunks:
         if not chunk.get("text", "").strip():
             continue
+
+        # Q&A mode: give answers a longer lead-in pause than normal segments
+        if chunk.get("is_answer"):
+            current += answer_pause_extra
+
         timing = next(timing_iter, None)
         if isinstance(timing, dict):
             dur = max(timing.get("duration", 0.0), 0.2)

@@ -1,11 +1,15 @@
 """
 main.py — Entry point for the Hindi Video Summarizer.
 
-Two independent flows, one entry point:
+Three independent flows, one entry point:
 
     TEXT MODE  (--text story.txt)
         story.txt → Lekha TTS → slideshow video
         No YouTube URL, no download, no Whisper.
+
+    QA MODE    (--qa questions.txt)
+        Interview prep: Q: ... / A: ... pairs → Lekha reads question,
+        pause + cue, reads answer → new slide per question.
 
     URL MODE   (python main.py <youtube_url>)
         YouTube → download → Whisper → summarize → Lekha TTS → slideshow video
@@ -13,7 +17,7 @@ Two independent flows, one entry point:
 Usage:
     python main.py https://youtu.be/xxxxxxxxxxx
     python main.py --text story.txt
-    python main.py --text story.txt --title "नेपोलियन हिल"
+    python main.py --qa interview_questions.txt --title "HR इंटरव्यू"
     python main.py https://youtu.be/xxxxxxxxxxx --ratio 0.80
 """
 
@@ -60,12 +64,14 @@ Examples:
         """,
     )
 
-    # ── Input: exactly one of url or --text required ─────────────
+    # ── Input: exactly one of url / --text / --qa required ────────
     input_group = p.add_mutually_exclusive_group(required=True)
     input_group.add_argument("url", nargs="?", default=None,
                              help="YouTube video URL")
     input_group.add_argument("--text", metavar="FILE",
                              help="Path to a Hindi .txt file (skips download & Whisper)")
+    input_group.add_argument("--qa", metavar="FILE",
+                             help="Path to a Q&A .txt file (interview prep mode)")
 
     # ── Shared options ────────────────────────────────────────────
     p.add_argument("--title", default="summary",
@@ -253,6 +259,42 @@ def run_text_flow(args: argparse.Namespace) -> None:
 
 
 # ─────────────────────────────────────────────────────────────
+#  FLOW A2 — Q&A FILE  (interview prep mode, no URL, no Whisper)
+# ─────────────────────────────────────────────────────────────
+
+def run_qa_flow(args: argparse.Namespace) -> None:
+    """
+    Q&A file → segments (question, then pause+cue, then answer) →
+    Lekha TTS → slideshow with a new slide starting at each answer.
+    No download. No Whisper. No YouTube URL needed.
+    """
+    total_start = time.time()
+    _apply_config(args)
+    font_path = _shared_setup()
+
+    _step("STEP 1 / 5 — Loading Q&A file")
+    segments = _load_qa_file(args.qa)
+    log.info("Loaded %d question/answer pairs from %s", len(segments) // 2, args.qa)
+
+    _step("STEP 2 / 5 — Ready (no download needed)")
+    safe_title     = _safe_title(args.title)
+    orig_meta      = {"title": args.title}
+    total_duration = 0.0   # unknown until after TTS; set inside _step3_to_7
+
+    _step3_to_7(
+        segments=segments,
+        total_duration=total_duration,
+        safe_title=safe_title,
+        font_path=font_path,
+        is_reel=False,
+        orig_meta=orig_meta,
+        args=args,
+    )
+
+    log.info("Total time: %s", human_duration(time.time() - total_start))
+
+
+# ─────────────────────────────────────────────────────────────
 #  FLOW B — YOUTUBE URL  (original flow, unchanged)
 # ─────────────────────────────────────────────────────────────
 
@@ -329,6 +371,72 @@ def _load_text_file(path: str) -> list[dict]:
     ]
 
 
+def _load_qa_file(path: str) -> list[dict]:
+    """
+    Read a Q&A text file shaped like:
+
+        Q: आपकी ताकत क्या है?
+        A: मेरी सबसे बड़ी ताकत यह है कि...
+
+        Q: आप इस कंपनी में क्यों काम करना चाहते हैं?
+        A: मैंने आपकी कंपनी के बारे में पढ़ा है...
+
+    Each question becomes its own chunk (its own slide).
+    Each answer becomes the next chunk (a new slide), prefixed with a
+    spoken cue and marked so tts_generator can add a longer pause
+    before it starts.
+    """
+    import re
+
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
+
+    # Find all Q: ... A: ... pairs. Q and A text run until the next
+    # Q:/A: marker or end of file.
+    pattern = re.compile(
+        r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)",
+        re.DOTALL,
+    )
+    pairs = pattern.findall(raw)
+
+    if not pairs:
+        raise ValueError(f"No 'Q: ... A: ...' pairs found in {path}")
+
+    ANSWER_CUE = "अब इसका उत्तर है। "
+
+    segments = []
+    seg_id = 0
+    for question, answer in pairs:
+        question = " ".join(question.split())
+        answer   = " ".join(answer.split())
+
+        # Question → one chunk / one slide
+        segments.append({
+            "id":             seg_id,
+            "start":          float(seg_id),
+            "end":            float(seg_id + 1),
+            "text":           question,
+            "avg_logprob":    -0.1,
+            "no_speech_prob": 0.01,
+            "is_answer":      False,
+        })
+        seg_id += 1
+
+        # Answer → new chunk / new slide, with spoken cue + longer pause
+        segments.append({
+            "id":             seg_id,
+            "start":          float(seg_id),
+            "end":            float(seg_id + 1),
+            "text":           ANSWER_CUE + answer,
+            "avg_logprob":    -0.1,
+            "no_speech_prob": 0.01,
+            "is_answer":      True,   # used by tts_generator for extra pause
+        })
+        seg_id += 1
+
+    return segments
+
+
 def _step(msg: str) -> None:
     print(f"\n{'─' * 60}\n  {msg}\n{'─' * 60}")
 
@@ -380,7 +488,12 @@ if __name__ == "__main__":
     args   = parser.parse_args()
 
     # One decision here, then delegate to the right flow — no if/else inside flows
-    flow = run_text_flow if args.text else run_url_flow
+    if args.text:
+        flow = run_text_flow
+    elif args.qa:
+        flow = run_qa_flow
+    else:
+        flow = run_url_flow
 
     try:
         flow(args)

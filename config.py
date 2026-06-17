@@ -14,7 +14,7 @@ import os
 #   "small"    – good balance
 #   "medium"   – recommended for M1 8 GB  ← default
 #   "large-v3" – best quality, ~3 GB RAM, slower
-WHISPER_MODEL = "small"
+WHISPER_MODEL = "medium"
 
 # Output language. Supported values: "hi" and "en".
 # "hi" transcribes Hindi. "en" uses Whisper translate mode for English output.
@@ -33,6 +33,7 @@ MACOS_TTS_VOICES = {
 }
 MACOS_TTS_RATE = 125            # slightly slower = clearer pronunciation
 TTS_PAUSE_BETWEEN_SEGMENTS = 0.75   # slightly longer pause = more natural
+TTS_ANSWER_PAUSE_EXTRA = 0.6        # extra pause before an answer in Q&A mode
 TTS_PAUSE_BETWEEN_PHRASES = 0.30
 AUDIO_POST_PROCESSING = True
 AUDIO_FILTER = (
@@ -73,23 +74,11 @@ SLIDE_TITLE_MAX_WORDS = 9
 #  SUMMARY LENGTH
 # ─────────────────────────────────────────────────────────────
 # What fraction of the original video to keep (0.70–0.80)
-# TARGET_RATIO = 1.00   # 75 %
+TARGET_RATIO = 1.00   # 75 %
 
 # Keep first/last N seconds of the video always (intro/outro)
-# KEEP_INTRO_SECONDS = 10
-# KEEP_OUTRO_SECONDS = 10
-
-TARGET_RATIO = 1.00          # already correct ✓
-KEEP_INTRO_SECONDS = 0       # was 10 — don't treat intro separately
-KEEP_OUTRO_SECONDS = 0       # was 10 — don't treat outro separately
-STORYTELLING_MODE = True    # was True — no added transition phrases
-# ─────────────────────────────────────────────────────────────
-#  STORYTELLING SCRIPT STYLE
-# ─────────────────────────────────────────────────────────────
-# STORYTELLING_MODE = False # true for normal mode
-STORYTELLING_ADD_INTRO = True
-STORYTELLING_ADD_TRANSITIONS = True
-STORYTELLING_MAX_TRANSITIONS = 8
+KEEP_INTRO_SECONDS = 10
+KEEP_OUTRO_SECONDS = 10
 
 # ─────────────────────────────────────────────────────────────
 #  VIDEO DIMENSIONS
@@ -106,15 +95,30 @@ OUTPUT_FPS = 30
 # ─────────────────────────────────────────────────────────────
 #  SUBTITLE STYLING
 # ─────────────────────────────────────────────────────────────
-SUBTITLE_FONT_SIZE   = 42          # px – medium readable subtitles
+SUBTITLE_FONT_SIZE   = 58          # px – large readable subtitles (was 42)
 SUBTITLE_FONT_COLOR  = "white"
 SUBTITLE_HIGHLIGHT_COLOR = (255, 216, 76)
 SUBTITLE_POSITION    = "middle"    # "middle" or "bottom"
 SUBTITLE_BG_ALPHA    = 0           # 0 removes the black subtitle box
 SUBTITLE_MARGIN_Y    = 80          # px from bottom of frame
-SUBTITLE_MAX_CHARS   = 42          # wrap after this many characters
-SUBTITLE_MAX_WIDTH_RATIO = 0.86
 
+# SUBTITLE_MAX_CHARS scales with font size automatically, so .srt/.ass
+# exports wrap at roughly the same visual width no matter the font size.
+# (Baseline: 42 chars looked right at 42px font → ~1764 px-chars budget.)
+_SUBTITLE_CHAR_PIXEL_BUDGET = 42 * 42
+SUBTITLE_MAX_CHARS = max(12, round(_SUBTITLE_CHAR_PIXEL_BUDGET / SUBTITLE_FONT_SIZE))
+
+SUBTITLE_MAX_WIDTH_RATIO = 0.86    # actual burned-in text wraps to this
+                                    # fraction of screen width — already
+                                    # font-size independent, no change needed
+
+# ─────────────────────────────────────────────────────────────
+#  STORYTELLING SCRIPT STYLE
+# ─────────────────────────────────────────────────────────────
+STORYTELLING_MODE = True
+STORYTELLING_ADD_INTRO = True
+STORYTELLING_ADD_TRANSITIONS = True
+STORYTELLING_MAX_TRANSITIONS = 8
 
 # ─────────────────────────────────────────────────────────────
 #  BANNER STYLING
