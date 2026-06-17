@@ -14,7 +14,7 @@ import os
 #   "small"    – good balance
 #   "medium"   – recommended for M1 8 GB  ← default
 #   "large-v3" – best quality, ~3 GB RAM, slower
-WHISPER_MODEL = "medium"
+WHISPER_MODEL = "small"
 
 # Output language. Supported values: "hi" and "en".
 # "hi" transcribes Hindi. "en" uses Whisper translate mode for English output.
@@ -31,15 +31,21 @@ MACOS_TTS_VOICES = {
     "hi": "Lekha",
     "en": "Samantha",
 }
-MACOS_TTS_RATE = 135            # words per minute; lower = storytelling pace
-TTS_PAUSE_BETWEEN_SEGMENTS = 0.65
-TTS_PAUSE_BETWEEN_PHRASES = 0.24
+MACOS_TTS_RATE = 125            # slightly slower = clearer pronunciation
+TTS_PAUSE_BETWEEN_SEGMENTS = 0.75   # slightly longer pause = more natural
+TTS_PAUSE_BETWEEN_PHRASES = 0.30
 AUDIO_POST_PROCESSING = True
 AUDIO_FILTER = (
-    "highpass=f=80,"
-    "lowpass=f=12000,"
-    "acompressor=threshold=-18dB:ratio=2.2:attack=15:release=200,"
-    "loudnorm=I=-16:TP=-1.5:LRA=11"
+    # Remove very low rumble below 100 Hz (mic noise, hum)
+    "highpass=f=100,"
+    # Gentle high-frequency roll-off — Lekha sounds harsh above 10 kHz
+    "lowpass=f=10000,"
+    # De-ess: tame sibilance (स, श, च sounds that can sound sharp)
+    "equalizer=f=7000:width_type=o:width=2:g=-3,"
+    # Light compression: keeps loud and quiet parts balanced
+    "acompressor=threshold=-16dB:ratio=2.5:attack=10:release=150:makeup=2,"
+    # Loudness normalisation to broadcast standard (-16 LUFS)
+    "loudnorm=I=-16:TP=-1.5:LRA=9"
 )
 
 MMS_TTS_MODEL_IDS = {
@@ -67,11 +73,23 @@ SLIDE_TITLE_MAX_WORDS = 9
 #  SUMMARY LENGTH
 # ─────────────────────────────────────────────────────────────
 # What fraction of the original video to keep (0.70–0.80)
-TARGET_RATIO = 1.00   # 75 %
+# TARGET_RATIO = 1.00   # 75 %
 
 # Keep first/last N seconds of the video always (intro/outro)
-KEEP_INTRO_SECONDS = 10
-KEEP_OUTRO_SECONDS = 10
+# KEEP_INTRO_SECONDS = 10
+# KEEP_OUTRO_SECONDS = 10
+
+TARGET_RATIO = 1.00          # already correct ✓
+KEEP_INTRO_SECONDS = 0       # was 10 — don't treat intro separately
+KEEP_OUTRO_SECONDS = 0       # was 10 — don't treat outro separately
+STORYTELLING_MODE = True    # was True — no added transition phrases
+# ─────────────────────────────────────────────────────────────
+#  STORYTELLING SCRIPT STYLE
+# ─────────────────────────────────────────────────────────────
+# STORYTELLING_MODE = False # true for normal mode
+STORYTELLING_ADD_INTRO = True
+STORYTELLING_ADD_TRANSITIONS = True
+STORYTELLING_MAX_TRANSITIONS = 8
 
 # ─────────────────────────────────────────────────────────────
 #  VIDEO DIMENSIONS
@@ -97,13 +115,6 @@ SUBTITLE_MARGIN_Y    = 80          # px from bottom of frame
 SUBTITLE_MAX_CHARS   = 42          # wrap after this many characters
 SUBTITLE_MAX_WIDTH_RATIO = 0.86
 
-# ─────────────────────────────────────────────────────────────
-#  STORYTELLING SCRIPT STYLE
-# ─────────────────────────────────────────────────────────────
-STORYTELLING_MODE = True
-STORYTELLING_ADD_INTRO = True
-STORYTELLING_ADD_TRANSITIONS = True
-STORYTELLING_MAX_TRANSITIONS = 8
 
 # ─────────────────────────────────────────────────────────────
 #  BANNER STYLING

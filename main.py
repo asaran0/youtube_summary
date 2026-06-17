@@ -1,12 +1,20 @@
 """
-main.py — Entry point for the Hindi YouTube Video Summarizer.
+main.py — Entry point for the Hindi Video Summarizer.
+
+Two independent flows, one entry point:
+
+    TEXT MODE  (--text story.txt)
+        story.txt → Lekha TTS → slideshow video
+        No YouTube URL, no download, no Whisper.
+
+    URL MODE   (python main.py <youtube_url>)
+        YouTube → download → Whisper → summarize → Lekha TTS → slideshow video
 
 Usage:
-    python main.py <youtube_url>
-    python main.py <youtube_url> --ratio 0.80
-    python main.py <youtube_url> --model large-v3 --keep-temp
-
-Run  python main.py --help  for all options.
+    python main.py https://youtu.be/xxxxxxxxxxx
+    python main.py --text story.txt
+    python main.py --text story.txt --title "नेपोलियन हिल"
+    python main.py https://youtu.be/xxxxxxxxxxx --ratio 0.80
 """
 
 import os
@@ -15,7 +23,6 @@ import time
 import argparse
 import logging
 
-# ── Project modules ──────────────────────────────────────────────────────────
 import config
 import downloader
 import transcriber
@@ -36,71 +43,64 @@ log = get_logger("main")
 
 
 # ─────────────────────────────────────────────────────────────
-#  CLI  ARGUMENT PARSER
+#  CLI
 # ─────────────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="main.py",
-        description="🎬  Hindi YouTube Video Summarizer — creates a condensed summary video",
+        description="🎬  Hindi Video Summarizer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python main.py https://youtu.be/xxxxxxxxxxx
   python main.py https://youtu.be/xxxxxxxxxxx --ratio 0.80
-  python main.py https://youtu.be/xxxxxxxxxxx --model large-v3
-  python main.py https://youtu.be/xxxxxxxxxxx --no-banners --keep-temp
+  python main.py --text story.txt
+  python main.py --text story.txt --title "नेपोलियन हिल"
         """,
     )
 
-    p.add_argument("url",
-                   help="YouTube video URL")
+    # ── Input: exactly one of url or --text required ─────────────
+    input_group = p.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("url", nargs="?", default=None,
+                             help="YouTube video URL")
+    input_group.add_argument("--text", metavar="FILE",
+                             help="Path to a Hindi .txt file (skips download & Whisper)")
 
+    # ── Shared options ────────────────────────────────────────────
+    p.add_argument("--title", default="summary",
+                   help="Output filename title (used in text mode)")
     p.add_argument("--ratio", type=float, default=config.TARGET_RATIO,
                    metavar="RATIO",
-                   help=f"Fraction of video to keep, e.g. 0.75  (default: {config.TARGET_RATIO})")
-
+                   help=f"Fraction of content to keep (default: {config.TARGET_RATIO})")
     p.add_argument("--model", default=config.WHISPER_MODEL,
                    choices=["tiny", "base", "small", "medium", "large-v3"],
-                   help=f"Whisper model size  (default: {config.WHISPER_MODEL})")
-
+                   help=f"Whisper model size (default: {config.WHISPER_MODEL})")
     p.add_argument("--no-banners", action="store_true",
                    help="Disable animated topic banners")
-
     p.add_argument("--language", choices=["hi", "en"], default=config.LANGUAGE,
-                   help=f"Output/transcription language: hi or en  (default: {config.LANGUAGE})")
-
+                   help=f"Language (default: {config.LANGUAGE})")
     p.add_argument("--voice", default=None,
-                   help="macOS TTS voice name  (default: language-specific)")
-
+                   help="macOS TTS voice name")
     p.add_argument("--tts-backend", choices=["macos", "mms"], default=config.TTS_BACKEND,
-                   help=f"TTS backend  (default: {config.TTS_BACKEND})")
-
+                   help=f"TTS backend (default: {config.TTS_BACKEND})")
     p.add_argument("--format", choices=["auto", "youtube", "reel"], default=config.OUTPUT_FORMAT,
-                   help=f"Output layout  (default: {config.OUTPUT_FORMAT})")
-
+                   help=f"Output layout (default: {config.OUTPUT_FORMAT})")
     p.add_argument("--keep-temp", action="store_true",
                    help="Keep temporary files after processing")
-
     p.add_argument("--output-dir", default=config.OUTPUT_DIR,
-                   help=f"Directory for final output files  (default: {config.OUTPUT_DIR})")
-
+                   help=f"Output directory (default: {config.OUTPUT_DIR})")
     p.add_argument("--verbose", action="store_true",
-                   help="Show debug-level log messages")
+                   help="Show debug-level logs")
 
     return p
 
 
 # ─────────────────────────────────────────────────────────────
-#  MAIN PIPELINE
+#  SHARED SETUP  (runs before both flows)
 # ─────────────────────────────────────────────────────────────
 
-def run(args: argparse.Namespace) -> None:
-    """Execute the complete summarization pipeline."""
-
-    total_start = time.time()
-
-    # ── Apply CLI overrides to config ────────────────────────────────────
+def _apply_config(args: argparse.Namespace) -> None:
     config.TARGET_RATIO    = args.ratio
     config.WHISPER_MODEL   = args.model
     config.BANNER_ENABLED  = not args.no_banners
@@ -109,84 +109,62 @@ def run(args: argparse.Namespace) -> None:
     config.MACOS_TTS_VOICE = args.voice or config.MACOS_TTS_VOICES.get(args.language, config.MACOS_TTS_VOICE)
     config.TTS_BACKEND     = args.tts_backend
     config.OUTPUT_FORMAT   = args.format
-
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # ── Sanity checks ────────────────────────────────────────────────────
+
+def _shared_setup() -> str:
+    """Dependency checks, dirs, font. Returns font_path."""
     log.info("Checking dependencies …")
     check_system_deps()
     check_python_deps()
-
     ensure_dirs(config.OUTPUT_DIR, config.TEMP_DIR, config.ASSETS_DIR)
-
-    # ── Locate / download Hindi font ─────────────────────────────────────
     log.info("Looking for Hindi font …")
-    font_path = find_hindi_font()
-    font_dir  = os.path.dirname(os.path.abspath(font_path))
+    return find_hindi_font()
 
-    # ═══════════════════════════════════════════════════════════════
-    #  STEP 1 — DOWNLOAD
-    # ═══════════════════════════════════════════════════════════════
-    _step("STEP 1 / 7 — Downloading audio")
-    dl = downloader.download(args.url)
 
-    video_path = dl["video_path"]
-    audio_path = dl["audio_path"]
-    orig_meta  = dl["metadata"]
-    is_reel    = dl["is_reel"]
+# ─────────────────────────────────────────────────────────────
+#  SHARED STEPS  (used by both flows)
+# ─────────────────────────────────────────────────────────────
 
-    total_duration = float(orig_meta.get("duration") or 0) or get_video_duration(audio_path)
-    log.info("Original duration: %s", human_duration(total_duration))
+def _step3_to_7(
+    segments: list[dict],
+    total_duration: float,
+    safe_title: str,
+    font_path: str,
+    is_reel: bool,
+    orig_meta: dict,
+    args: argparse.Namespace,
+) -> None:
+    """
+    Steps 3–7 are identical for both flows:
+    summarize → TTS → subtitles → slideshow → metadata
+    """
 
-    # ═══════════════════════════════════════════════════════════════
-    #  STEP 2 — TRANSCRIBE
-    # ═══════════════════════════════════════════════════════════════
-    _step("STEP 2 / 7 — Transcribing audio (Whisper)")
-    segments = transcriber.transcribe(audio_path)
-    log.info("Full transcript: %d segments", len(segments))
-
-    # ═══════════════════════════════════════════════════════════════
-    #  STEP 3 — SELECT IMPORTANT SEGMENTS
-    # ═══════════════════════════════════════════════════════════════
-    _step("STEP 3 / 7 — Selecting important segments")
-    result = summarizer.select_segments(segments, total_duration)
-
+    # ── Step 3: Summarize ────────────────────────────────────────
+    _step("STEP 3 / 5 — Selecting segments")
+    result   = summarizer.select_segments(segments, total_duration)
     selected = result["selected_segments"]
-    topic_groups  = result["topic_groups"]
-    summary_dur   = result["summary_duration"]
+    topic_groups = result["topic_groups"]
+    log.info("Kept %.0f%% of content", result["kept_ratio"] * 100)
 
-    log.info(
-        "Kept %.0f %% of content  (%s → %s)",
-        result["kept_ratio"] * 100,
-        human_duration(total_duration),
-        human_duration(summary_dur),
-    )
     selected = narration_adapter.apply_storytelling(selected)
 
-    # ═══════════════════════════════════════════════════════════════
-    #  STEP 4 — GENERATE SUBTITLE FILE
-    # ═══════════════════════════════════════════════════════════════
-    _step("STEP 4 / 7 — Generating new narration")
-
+    # ── Step 4: TTS ──────────────────────────────────────────────
+    _step("STEP 4 / 5 — Generating Lekha narration")
     tts_audio_path = tts_generator.generate_tts_audio(selected)
-    summary_dur = selected[-1]["new_end"] if selected else get_video_duration(tts_audio_path)
-    topic_groups = _retime_topic_groups(topic_groups, selected)
-    log.info("Generated narration duration: %s", human_duration(summary_dur))
+    summary_dur    = selected[-1]["new_end"] if selected else get_video_duration(tts_audio_path)
+    topic_groups   = _retime_topic_groups(topic_groups, selected)
+    log.info("Narration duration: %s", human_duration(summary_dur))
 
-    # ═══════════════════════════════════════════════════════════════
-    #  STEP 5 — GENERATE SUBTITLE FILE
-    # ═══════════════════════════════════════════════════════════════
-    _step("STEP 5 / 7 — Generating subtitles")
+    # total_duration fallback for text-only mode (was 0.0 before TTS)
+    if total_duration == 0.0:
+        total_duration = summary_dur
 
-    safe_title  = _safe_title(orig_meta.get("title", "summary"))
-    srt_path    = os.path.join(config.OUTPUT_DIR, f"{safe_title}.srt")
-
-    target_w, target_h = (
-        (config.REEL_WIDTH, config.REEL_HEIGHT)
-        if _use_reel_layout(is_reel)
-        else (config.YOUTUBE_WIDTH, config.YOUTUBE_HEIGHT)
-    )
+    # ── Step 5: Subtitles ────────────────────────────────────────
+    _step("STEP 5 / 5 — Subtitles + slideshow + metadata")
+    srt_path = os.path.join(config.OUTPUT_DIR, f"{safe_title}.srt")
+    target_w, target_h = _video_dimensions(is_reel)
 
     ass_path = subtitle_handler.generate_subtitle_files(
         selected_chunks=selected,
@@ -195,13 +173,9 @@ def run(args: argparse.Namespace) -> None:
         video_width=target_w,
         video_height=target_h,
     )
-    log.info("SRT file → %s", srt_path)
 
-    # ═══════════════════════════════════════════════════════════════
-    #  STEP 6 — COMPILE VIDEO  (new slideshow + generated voice)
-    # ═══════════════════════════════════════════════════════════════
-    _step("STEP 6 / 7 — Compiling slideshow video")
-
+    # ── Slideshow + burn subs ────────────────────────────────────
+    font_dir    = os.path.dirname(os.path.abspath(font_path))
     no_sub_path = os.path.join(config.TEMP_DIR, "summary_no_sub.mp4")
     slideshow_renderer.compile_slideshow_video(
         selected_chunks=selected,
@@ -210,10 +184,9 @@ def run(args: argparse.Namespace) -> None:
         video_width=target_w,
         video_height=target_h,
         font_path=font_path,
-        title=orig_meta.get("title", ""),
+        title=orig_meta.get("title", safe_title),
     )
 
-    # Burn subtitles in
     final_video_path = os.path.join(config.OUTPUT_DIR, f"{safe_title}_summary.mp4")
     subtitle_handler.burn_subtitles(
         input_video=no_sub_path,
@@ -223,10 +196,7 @@ def run(args: argparse.Namespace) -> None:
         font_path=font_path,
     )
 
-    # ═══════════════════════════════════════════════════════════════
-    #  STEP 7 — METADATA FILE
-    # ═══════════════════════════════════════════════════════════════
-    _step("STEP 7 / 7 — Writing metadata")
+    # ── Metadata ─────────────────────────────────────────────────
     meta_path = metadata_writer.generate_and_save(
         original_metadata=orig_meta,
         selected_chunks=selected,
@@ -235,81 +205,169 @@ def run(args: argparse.Namespace) -> None:
         output_dir=config.OUTPUT_DIR,
     )
 
-    # ── Clean temp files (unless --keep-temp) ───────────────────────────
     if not args.keep_temp:
-        log.info("Cleaning temporary files …")
         clean_temp()
 
-    # ── Final summary ───────────────────────────────────────────────────
-    elapsed = time.time() - total_start
     _print_completion_banner(
         video_path=final_video_path,
         srt_path=srt_path,
         meta_path=meta_path,
         original_dur=total_duration,
         summary_dur=summary_dur,
-        elapsed=elapsed,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+#  FLOW A — TEXT FILE  (no URL, no Whisper)
+# ─────────────────────────────────────────────────────────────
+
+def run_text_flow(args: argparse.Namespace) -> None:
+    """
+    Text file → segments → Lekha TTS → slideshow.
+    No download. No Whisper. No YouTube URL needed.
+    """
+    total_start = time.time()
+    _apply_config(args)
+    font_path = _shared_setup()
+
+    _step("STEP 1 / 5 — Loading text file")
+    segments = _load_text_file(args.text)
+    log.info("Loaded %d sentences from %s", len(segments), args.text)
+
+    _step("STEP 2 / 5 — Ready (no download needed)")
+    safe_title   = _safe_title(args.title)
+    orig_meta    = {"title": args.title}
+    total_duration = 0.0   # unknown until after TTS; set inside _step3_to_7
+
+    _step3_to_7(
+        segments=segments,
+        total_duration=total_duration,
+        safe_title=safe_title,
+        font_path=font_path,
+        is_reel=False,
+        orig_meta=orig_meta,
+        args=args,
+    )
+
+    log.info("Total time: %s", human_duration(time.time() - total_start))
+
+
+# ─────────────────────────────────────────────────────────────
+#  FLOW B — YOUTUBE URL  (original flow, unchanged)
+# ─────────────────────────────────────────────────────────────
+
+def run_url_flow(args: argparse.Namespace) -> None:
+    """
+    YouTube URL → download → Whisper → summarize → Lekha TTS → slideshow.
+    Original flow. Nothing changed here.
+    """
+    total_start = time.time()
+    _apply_config(args)
+    font_path = _shared_setup()
+
+    _step("STEP 1 / 5 — Downloading audio")
+    dl             = downloader.download(args.url)
+    audio_path     = dl["audio_path"]
+    orig_meta      = dl["metadata"]
+    is_reel        = dl["is_reel"]
+    total_duration = float(orig_meta.get("duration") or 0) or get_video_duration(audio_path)
+    log.info("Original duration: %s", human_duration(total_duration))
+
+    _step("STEP 2 / 5 — Transcribing (Whisper)")
+    segments = transcriber.transcribe(audio_path)
+    log.info("Transcribed %d segments", len(segments))
+
+    safe_title = _safe_title(orig_meta.get("title", "summary"))
+
+    _step3_to_7(
+        segments=segments,
+        total_duration=total_duration,
+        safe_title=safe_title,
+        font_path=font_path,
+        is_reel=is_reel,
+        orig_meta=orig_meta,
+        args=args,
+    )
+
+    log.info("Total time: %s", human_duration(time.time() - total_start))
 
 
 # ─────────────────────────────────────────────────────────────
 #  HELPERS
 # ─────────────────────────────────────────────────────────────
 
+def _load_text_file(path: str) -> list[dict]:
+    """
+    Read a plain Hindi .txt file and return Whisper-compatible segments.
+    Strips timestamp headers like [00:00:00 - 00:02:11] automatically.
+    Splits on sentence-ending punctuation: ।  .  ?  !
+    Fake timestamps spread evenly (corrected after TTS).
+    """
+    import re
+
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
+
+    raw = re.sub(r"\[\d{2}:\d{2}:\d{2}[^\]]*\]", "", raw)   # strip timestamps
+    sentences = re.split(r"(?<=[।.?!])\s+", raw.strip())
+    sentences = [s.strip() for s in sentences if s.strip()]
+
+    if not sentences:
+        raise ValueError(f"No text found in {path}")
+
+    seg_dur = 1.0   # placeholder; real timing set after TTS
+    return [
+        {
+            "id":               i,
+            "start":            round(i * seg_dur, 2),
+            "end":              round((i + 1) * seg_dur, 2),
+            "text":             text,
+            "avg_logprob":      -0.1,
+            "no_speech_prob":   0.01,
+        }
+        for i, text in enumerate(sentences)
+    ]
+
+
 def _step(msg: str) -> None:
-    """Print a prominent step header."""
-    print(f"\n{'─' * 60}")
-    print(f"  {msg}")
-    print(f"{'─' * 60}")
+    print(f"\n{'─' * 60}\n  {msg}\n{'─' * 60}")
 
 
 def _safe_title(title: str, max_len: int = 40) -> str:
-    """Convert title to a safe filename prefix."""
     import re
-    safe = re.sub(r'[^\w\s\-]', '', title)
-    safe = re.sub(r'\s+', '_', safe.strip())
+    safe = re.sub(r"[^\w\s\-]", "", title)
+    safe = re.sub(r"\s+", "_", safe.strip())
     return safe[:max_len] or "summary"
 
 
-def _use_reel_layout(source_is_reel: bool) -> bool:
-    if config.OUTPUT_FORMAT == "reel":
-        return True
-    if config.OUTPUT_FORMAT == "youtube":
-        return False
-    return source_is_reel
+def _video_dimensions(is_reel: bool) -> tuple[int, int]:
+    if config.OUTPUT_FORMAT == "reel" or (config.OUTPUT_FORMAT == "auto" and is_reel):
+        return config.REEL_WIDTH, config.REEL_HEIGHT
+    return config.YOUTUBE_WIDTH, config.YOUTUBE_HEIGHT
 
 
-def _retime_topic_groups(topic_groups: list[tuple], selected: list[dict]) -> list[tuple]:
-    """Map topic chapter starts from original summary time to TTS time."""
+def _retime_topic_groups(topic_groups, selected):
     if not topic_groups or not selected:
         return topic_groups
-
     retimed = []
     for old_start, label in topic_groups:
-        chunk = min(
-            selected,
-            key=lambda c: abs(c.get("source_new_start", c.get("new_start", 0.0)) - old_start),
-        )
+        chunk = min(selected,
+                    key=lambda c: abs(c.get("source_new_start", c.get("new_start", 0.0)) - old_start))
         retimed.append((chunk.get("new_start", 0.0), label))
-
     retimed[0] = (0.0, retimed[0][1])
     return retimed
 
 
-def _print_completion_banner(
-    video_path, srt_path, meta_path,
-    original_dur, summary_dur, elapsed
-) -> None:
+def _print_completion_banner(video_path, srt_path, meta_path, original_dur, summary_dur):
     print("\n" + "═" * 60)
     print("  ✅  DONE!  Summary video is ready.")
     print("═" * 60)
-    print(f"  🎬  Video   : {video_path}")
+    print(f"  🎬  Video    : {video_path}")
     print(f"  📄  Subtitles: {srt_path}")
     print(f"  📋  Metadata : {meta_path}")
-    print(f"  ⏱  Original : {human_duration(original_dur)}")
-    print(f"  ✂️  Summary  : {human_duration(summary_dur)}"
-          f"  ({summary_dur / original_dur * 100:.0f} %)")
-    print(f"  🕐  Processing time: {human_duration(elapsed)}")
+    if original_dur:
+        print(f"  ⏱  Original : {human_duration(original_dur)}")
+    print(f"  ✂️  Output   : {human_duration(summary_dur)}")
     print("═" * 60 + "\n")
 
 
@@ -321,8 +379,11 @@ if __name__ == "__main__":
     parser = build_parser()
     args   = parser.parse_args()
 
+    # One decision here, then delegate to the right flow — no if/else inside flows
+    flow = run_text_flow if args.text else run_url_flow
+
     try:
-        run(args)
+        flow(args)
     except KeyboardInterrupt:
         print("\n\n⚠️  Interrupted by user.")
         sys.exit(0)

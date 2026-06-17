@@ -298,8 +298,11 @@ def _clean_text_for_tts(text: str) -> str:
     """
     Clean text before sending to TTS engine.
     Removes timestamps, URLs, special symbols, excess whitespace.
+    For Hindi mode: transliterates English words into Hindi phonetics
+    so Lekha / MMS-TTS pronounces them correctly instead of skipping them.
     """
     import re
+
     # Remove URLs
     text = re.sub(r"https?://\S+", "", text)
     # Remove common noise markers whisper sometimes adds
@@ -309,7 +312,144 @@ def _clean_text_for_tts(text: str) -> str:
     text = re.sub(r"[।\.]{2,}", "।", text)
     # Clean whitespace
     text = re.sub(r"\s+", " ", text).strip()
+
+    # ── Hindi mode: fix English words so TTS pronounces them properly ──
+    if config.LANGUAGE == "hi":
+        text = _transliterate_english_in_hindi(text)
+
     return text
+
+
+# Common English words / tech terms → Hindi phonetic spellings
+# Add more entries here as you encounter mispronounced words.
+_EN_TO_HI_PHONETIC: dict[str, str] = {
+    # Tech / social media
+    "youtube": "यूट्यूब",
+    "video": "वीडियो",
+    "channel": "चैनल",
+    "subscribe": "सब्सक्राइब",
+    "like": "लाइक",
+    "comment": "कमेंट",
+    "share": "शेयर",
+    "google": "गूगल",
+    "facebook": "फेसबुक",
+    "instagram": "इंस्टाग्राम",
+    "twitter": "ट्विटर",
+    "whatsapp": "व्हाट्सएप",
+    "mobile": "मोबाइल",
+    "phone": "फोन",
+    "internet": "इंटरनेट",
+    "online": "ऑनलाइन",
+    "app": "एप",
+    "software": "सॉफ्टवेयर",
+    "computer": "कंप्यूटर",
+    "laptop": "लैपटॉप",
+    "camera": "कैमरा",
+    "screen": "स्क्रीन",
+    "download": "डाउनलोड",
+    "upload": "अपलोड",
+    "password": "पासवर्ड",
+    "account": "अकाउंट",
+    "website": "वेबसाइट",
+    "link": "लिंक",
+    "notification": "नोटिफिकेशन",
+    "settings": "सेटिंग्स",
+    "update": "अपडेट",
+    # Finance / business
+    "market": "मार्केट",
+    "bank": "बैंक",
+    "loan": "लोन",
+    "emi": "ईएमआई",
+    "investment": "इन्वेस्टमेंट",
+    "profit": "प्रॉफिट",
+    "loss": "लॉस",
+    "percent": "प्रतिशत",
+    "tax": "टैक्स",
+    "business": "बिज़नेस",
+    "company": "कंपनी",
+    "startup": "स्टार्टअप",
+    "sales": "सेल्स",
+    "product": "प्रोडक्ट",
+    # General common English
+    "news": "न्यूज़",
+    "time": "टाइम",
+    "team": "टीम",
+    "game": "गेम",
+    "match": "मैच",
+    "world": "वर्ल्ड",
+    "india": "इंडिया",
+    "government": "गवर्नमेंट",
+    "police": "पुलिस",
+    "doctor": "डॉक्टर",
+    "hospital": "हॉस्पिटल",
+    "school": "स्कूल",
+    "college": "कॉलेज",
+    "student": "स्टूडेंट",
+    "office": "ऑफिस",
+    "report": "रिपोर्ट",
+    "point": "पॉइंट",
+    "process": "प्रोसेस",
+    "support": "सपोर्ट",
+    "system": "सिस्टम",
+    "problem": "प्रॉब्लम",
+    "solution": "सॉल्यूशन",
+    "example": "उदाहरण",
+    "interview": "इंटरव्यू",
+    "result": "रिजल्ट",
+    "test": "टेस्ट",
+    "power": "पावर",
+    "energy": "एनर्जी",
+    "science": "साइंस",
+    "technology": "टेक्नोलॉजी",
+}
+
+
+def _transliterate_english_in_hindi(text: str) -> str:
+    """
+    Replace English words inside Hindi text with their Hindi phonetic equivalents.
+
+    Strategy (in order):
+    1. Dictionary lookup for known words (most accurate, covers common terms).
+    2. For unknown English words, wrap them so Lekha reads letter-by-letter
+       (better than garbled pronunciation).
+
+    Works on mixed-script sentences like:
+        "आज का video बहुत अच्छा था"
+        → "आज का वीडियो बहुत अच्छा था"
+    """
+    import re
+
+    # Match sequences of ASCII letters (English words), case-insensitive
+    english_word_re = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)*")
+
+    def replace_word(match: re.Match) -> str:
+        word = match.group(0)
+        lower = word.lower()
+
+        # 1. Dictionary hit → use known Hindi phonetic spelling
+        if lower in _EN_TO_HI_PHONETIC:
+            return _EN_TO_HI_PHONETIC[lower]
+
+        # 2. Unknown word → spell it out with spaces so voice reads each letter
+        #    clearly rather than attempting broken Hindi pronunciation.
+        #    Example: "API" → "ए पी आई"
+        letter_map = {
+            "a": "ए", "b": "बी", "c": "सी", "d": "डी", "e": "ई",
+            "f": "एफ", "g": "जी", "h": "एच", "i": "आई", "j": "जे",
+            "k": "के", "l": "एल", "m": "एम", "n": "एन", "o": "ओ",
+            "p": "पी", "q": "क्यू", "r": "आर", "s": "एस", "t": "टी",
+            "u": "यू", "v": "वी", "w": "डब्ल्यू", "x": "एक्स",
+            "y": "वाई", "z": "ज़ेड",
+        }
+        # If it's a short acronym (≤4 chars, all caps or mixed), spell it out
+        if len(word) <= 5:
+            spelled = " ".join(letter_map.get(c.lower(), c) for c in word)
+            return spelled
+
+        # Longer unknown word → keep as-is (Lekha handles some English)
+        return word
+
+    return english_word_re.sub(replace_word, text)
 
 
 def _split_text_for_voice(text: str, max_chars: int = 180) -> list[str]:

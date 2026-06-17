@@ -245,20 +245,38 @@ def _split_intro_outro(chunks, total_dur):
     return intro, body, outro
 
 
+# def _greedy_select(chunks: list[dict], target_dur: float) -> list[dict]:
+#     """Select chunks greedily by descending score until target_dur is filled."""
+#     sorted_chunks = sorted(chunks, key=lambda c: c["score"], reverse=True)
+#     selected = []
+#     total    = 0.0
+#     for chunk in sorted_chunks:
+#         dur = _chunk_dur(chunk)
+#         if total + dur <= target_dur:
+#             selected.append(chunk)
+#             total += dur
+#         if total >= target_dur:
+#             break
+#     return selected
+
 def _greedy_select(chunks: list[dict], target_dur: float) -> list[dict]:
-    """Select chunks greedily by descending score until target_dur is filled."""
-    sorted_chunks = sorted(chunks, key=lambda c: c["score"], reverse=True)
+    """
+    When TARGET_RATIO == 1.0, return ALL chunks (full transcript mode).
+    Otherwise select greedily by score until target_dur is filled.
+    """
+    if config.TARGET_RATIO >= 1.0:
+        return chunks          # ← pass everything through, no filtering
+
     selected = []
-    total    = 0.0
-    for chunk in sorted_chunks:
-        dur = _chunk_dur(chunk)
+    total = 0.0
+    for chunk in sorted(chunks, key=lambda c: c["score"], reverse=True):
+        dur = chunk.get("end", 0) - chunk.get("start", 0)
         if total + dur <= target_dur:
             selected.append(chunk)
             total += dur
         if total >= target_dur:
             break
     return selected
-
 
 # ─────────────────────────────────────────────────────────────
 #  TIMESTAMP REMAPPING

@@ -11,9 +11,10 @@ from utils import get_logger
 
 log = get_logger("narration")
 
-
-HINDI_INTRO = "चलिए, इसे कहानी की तरह आसान भाषा में समझते हैं।"
-ENGLISH_INTRO = "Let's understand this in a simple, story-like way."
+HINDI_INTRO = ""
+ENGLISH_INTRO = ""
+# HINDI_INTRO = "चलिए, इसे कहानी की तरह आसान भाषा में समझते हैं।"
+# ENGLISH_INTRO = "Let's understand this in a simple, story-like way."
 
 HINDI_TRANSITIONS = [
     "अब ध्यान से समझिए,",
