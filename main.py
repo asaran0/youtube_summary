@@ -381,18 +381,28 @@ def _load_qa_file(path: str) -> list[dict]:
         Q: आप इस कंपनी में क्यों काम करना चाहते हैं?
         A: मैंने आपकी कंपनी के बारे में पढ़ा है...
 
-    Each question becomes its own chunk (its own slide).
-    Each answer becomes the next chunk (a new slide), prefixed with a
-    spoken cue and marked so tts_generator can add a longer pause
-    before it starts.
+    Each question becomes 4 chunks:
+      1. QUESTION     — spoken plainly (no extra cue), displayed with
+                         config.QA_QUESTION_LABEL_TEMPLATE (if
+                         config.QA_SHOW_QUESTION_LABEL), styled per
+                         config.QA_QUESTION_FONT_SIZE / QA_QUESTION_FONT_COLOR.
+      2. TRY_YOURSELF  — silent, config.QA_TRY_YOURSELF_SECONDS long,
+                         displays config.QA_TRY_YOURSELF_TEXT, styled per
+                         config.QA_TRY_YOURSELF_FONT_SIZE / FONT_COLOR.
+      3. COUNTDOWN     — silent, config.QA_COUNTDOWN_SECONDS long, displays
+                         "3 2 1" style countdown, styled per
+                         config.QA_COUNTDOWN_FONT_SIZE / QA_COUNTDOWN_FONT_COLOR.
+      4. ANSWER        — spoken normally, styled per
+                         config.QA_ANSWER_FONT_SIZE / QA_ANSWER_FONT_COLOR.
+
+    Every chunk carries a "style" tag that subtitle_handler uses to pick
+    font size + color for that chunk.
     """
     import re
 
     with open(path, encoding="utf-8") as f:
         raw = f.read()
 
-    # Find all Q: ... A: ... pairs. Q and A text run until the next
-    # Q:/A: marker or end of file.
     pattern = re.compile(
         r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)",
         re.DOTALL,
@@ -402,35 +412,78 @@ def _load_qa_file(path: str) -> list[dict]:
     if not pairs:
         raise ValueError(f"No 'Q: ... A: ...' pairs found in {path}")
 
-    ANSWER_CUE = "अब इसका उत्तर है। "
-
     segments = []
     seg_id = 0
-    for question, answer in pairs:
+    for q_num, (question, answer) in enumerate(pairs, start=1):
         question = " ".join(question.split())
         answer   = " ".join(answer.split())
 
-        # Question → one chunk / one slide
+        # Display text (what's shown on screen) vs spoken text (what TTS
+        # reads) are kept separate so the on-screen label never gets
+        # spoken aloud.
+        if config.QA_SHOW_QUESTION_LABEL:
+            display_question = config.QA_QUESTION_LABEL_TEMPLATE.format(n=q_num) + question
+        else:
+            display_question = question
+
+        # 1. QUESTION chunk — spoken plainly, no added cue, larger gold text
         segments.append({
             "id":             seg_id,
             "start":          float(seg_id),
             "end":            float(seg_id + 1),
-            "text":           question,
+            "text":           question,            # spoken as-is, no prefix
+            "display_text":   display_question,
             "avg_logprob":    -0.1,
             "no_speech_prob": 0.01,
-            "is_answer":      False,
+            "style":          "question",
         })
         seg_id += 1
 
-        # Answer → new chunk / new slide, with spoken cue + longer pause
+        # 2. TRY_YOURSELF chunk — silent, prompts viewer to pause and think
         segments.append({
             "id":             seg_id,
             "start":          float(seg_id),
             "end":            float(seg_id + 1),
-            "text":           ANSWER_CUE + answer,
+            "text":           "",                  # nothing spoken
+            "display_text":   config.QA_TRY_YOURSELF_TEXT,
             "avg_logprob":    -0.1,
             "no_speech_prob": 0.01,
-            "is_answer":      True,   # used by tts_generator for extra pause
+            "style":          "try_yourself",
+            "is_silent":      True,
+            "silent_duration": float(config.QA_TRY_YOURSELF_SECONDS),
+        })
+        seg_id += 1
+
+        # 3. COUNTDOWN chunk — silent, shows "3 2 1"
+        countdown_text = " ".join(
+            str(n) for n in range(config.QA_COUNTDOWN_SECONDS, 0, -1)
+        )
+        segments.append({
+            "id":             seg_id,
+            "start":          float(seg_id),
+            "end":            float(seg_id + 1),
+            "text":           "",                      # nothing spoken
+            "display_text":   countdown_text,
+            "avg_logprob":    -0.1,
+            "no_speech_prob": 0.01,
+            "style":          "countdown",
+            "is_silent":      True,                     # tts_generator: insert
+                                                          # silence instead of audio
+            "silent_duration": float(config.QA_COUNTDOWN_SECONDS),
+        })
+        seg_id += 1
+
+        # 4. ANSWER chunk — spoken normally, white text
+        segments.append({
+            "id":             seg_id,
+            "start":          float(seg_id),
+            "end":            float(seg_id + 1),
+            "text":           answer,
+            "display_text":   answer,
+            "avg_logprob":    -0.1,
+            "no_speech_prob": 0.01,
+            "style":          "answer",
+            "is_answer":      True,   # tts_generator: extra lead-in pause
         })
         seg_id += 1
 

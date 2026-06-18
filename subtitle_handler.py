@@ -23,6 +23,36 @@ from utils import get_logger, seconds_to_srt, seconds_to_ass, _ass_time_to_secon
 log = get_logger("subtitles")
 
 
+def _style_attrs(style: str) -> dict:
+    """
+    Look up font size / RGB color for a given subtitle style tag.
+    Falls back to the normal config.SUBTITLE_FONT_SIZE / white for
+    "default" or any unrecognised style — so non-Q&A flows are
+    completely unaffected.
+    """
+    if style == "question":
+        return {
+            "size":  getattr(config, "QA_QUESTION_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+            "color": getattr(config, "QA_QUESTION_FONT_COLOR", (255, 255, 255)),
+        }
+    if style == "answer":
+        return {
+            "size":  getattr(config, "QA_ANSWER_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+            "color": getattr(config, "QA_ANSWER_FONT_COLOR", (255, 255, 255)),
+        }
+    if style == "countdown":
+        return {
+            "size":  getattr(config, "QA_COUNTDOWN_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+            "color": getattr(config, "QA_COUNTDOWN_FONT_COLOR", (255, 255, 255)),
+        }
+    if style == "try_yourself":
+        return {
+            "size":  getattr(config, "QA_TRY_YOURSELF_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+            "color": getattr(config, "QA_TRY_YOURSELF_FONT_COLOR", (255, 255, 255)),
+        }
+    return {"size": config.SUBTITLE_FONT_SIZE, "color": (255, 255, 255)}
+
+
 # ─────────────────────────────────────────────────────────────
 #  PUBLIC API
 # ─────────────────────────────────────────────────────────────
@@ -84,24 +114,46 @@ def burn_subtitles(
             start = _ass_time_to_seconds(parts[1].strip())
             end   = _ass_time_to_seconds(parts[2].strip())
             text  = parts[9].strip()
+
+            # Recover our custom {style=...} marker before stripping tags
+            style_match = re.match(r"\{style=(\w+)\}", text)
+            style = style_match.group(1) if style_match else "default"
+
             # Clean ASS tags and line breaks
             text  = re.sub(r"\{[^}]*\}", "", text)
             text  = text.replace(r"\N", "\n").replace(r"\n", "\n")
             if text:
-                subtitles.append((start, end, text))
+                subtitles.append((start, end, text, style))
 
     # ── Load video ────────────────────────────────────────────
     clip = VideoFileClip(input_video)
     W, H = clip.size
 
     # ── Find font ─────────────────────────────────────────────
-    font_size = config.SUBTITLE_FONT_SIZE
-    font_pil = _load_subtitle_font(font_path, font_dir, font_size, ImageFont)
-    fallback_font = _load_fallback_font(font_size, ImageFont)
-    if font_pil is None:
-        font_pil = fallback_font or ImageFont.load_default()
-    if fallback_font is None:
-        fallback_font = font_pil
+    # Build fonts for every size used across styles (default + Q&A
+    # question/answer/countdown), so each line can render at its own size.
+    sizes_needed = {
+        config.SUBTITLE_FONT_SIZE,
+        getattr(config, "QA_QUESTION_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+        getattr(config, "QA_ANSWER_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+        getattr(config, "QA_COUNTDOWN_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+        getattr(config, "QA_TRY_YOURSELF_FONT_SIZE", config.SUBTITLE_FONT_SIZE),
+    }
+    font_cache = {}
+    fallback_cache = {}
+    for size in sizes_needed:
+        f_pil = _load_subtitle_font(font_path, font_dir, size, ImageFont)
+        f_fallback = _load_fallback_font(size, ImageFont)
+        if f_pil is None:
+            f_pil = f_fallback or ImageFont.load_default()
+        if f_fallback is None:
+            f_fallback = f_pil
+        font_cache[size] = f_pil
+        fallback_cache[size] = f_fallback
+
+    # Default font objects (used by "default" style — unchanged behavior)
+    font_pil = font_cache[config.SUBTITLE_FONT_SIZE]
+    fallback_font = fallback_cache[config.SUBTITLE_FONT_SIZE]
 
     bg_alpha  = config.SUBTITLE_BG_ALPHA   # 0-255 opacity
 
@@ -109,9 +161,14 @@ def burn_subtitles(
         frame = clip.get_frame(t)
         img   = Image.fromarray(frame).convert("RGBA")
 
-        for (start, end, text) in subtitles:
+        for (start, end, text, style) in subtitles:
             if not (start <= t < end):
                 continue
+
+            attrs = _style_attrs(style)
+            line_font = font_cache.get(attrs["size"], font_pil)
+            line_fallback = fallback_cache.get(attrs["size"], fallback_font)
+            base_color = attrs["color"]
 
             draw   = ImageDraw.Draw(img)
             raw_lines = text.split("\n")
@@ -121,14 +178,14 @@ def burn_subtitles(
                     _wrap_line_to_pixels(
                         draw,
                         raw_line,
-                        font_pil,
-                        fallback_font,
+                        line_font,
+                        line_fallback,
                         int(W * config.SUBTITLE_MAX_WIDTH_RATIO),
                     )
                 )
 
             # Measure total text block size
-            line_sizes = [_mixed_text_size(draw, ln, font_pil, fallback_font) for ln in lines]
+            line_sizes = [_mixed_text_size(draw, ln, line_font, line_fallback) for ln in lines]
             line_heights = [size[1] for size in line_sizes]
             line_widths  = [size[0] for size in line_sizes]
             pad     = 10
@@ -160,12 +217,12 @@ def burn_subtitles(
                 lx = (W - lw) // 2
                 for dx, dy in [(-2,0),(2,0),(0,-2),(0,2),(-1,-1),(1,-1),(-1,1),(1,1)]:
                     _draw_highlighted_text(
-                        draw, (lx + dx, cy + dy), ln, font_pil, fallback_font,
-                        active_word, word_offset, outline=True
+                        draw, (lx + dx, cy + dy), ln, line_font, line_fallback,
+                        active_word, word_offset, outline=True, base_color=base_color,
                     )
                 _draw_highlighted_text(
-                    draw, (lx, cy), ln, font_pil, fallback_font,
-                    active_word, word_offset, outline=False
+                    draw, (lx, cy), ln, line_font, line_fallback,
+                    active_word, word_offset, outline=False, base_color=base_color,
                 )
                 word_offset += _count_words([ln])
                 cy += line_heights[i] + 4
@@ -241,7 +298,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     dialogue_lines = []
     for item in items:
-        text = _ass_escape(_wrap_text_ass(item["text"], config.SUBTITLE_MAX_CHARS))
+        style = item.get("style", "default")
+        attrs = _style_attrs(style)
+        # Wrap chars scale with this item's own font size, same formula
+        # used for the global SUBTITLE_MAX_CHARS in config.py.
+        item_max_chars = max(12, round((42 * 42) / attrs["size"]))
+        text = _ass_escape(_wrap_text_ass(item["text"], item_max_chars))
+        # Custom marker (not a real ASS override) so burn_subtitles can
+        # recover which style this line was — stripped before rendering
+        # in any other ASS consumer since it's a harmless {} tag.
+        text = f"{{style={style}}}" + text
         start = seconds_to_ass(item["start"])
         end   = seconds_to_ass(item["end"])
         dialogue_lines.append(
@@ -261,7 +327,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 def _flatten_to_items(chunks: list[dict]) -> list[dict]:
     """
     Flatten chunk → segment hierarchy into a flat list of
-    {start, end, text} items using remapped timestamps.
+    {start, end, text, style} items using remapped timestamps.
+
+    "style" is "question" / "answer" / "countdown" (Q&A mode) or
+    "default" for normal narration — used to pick font size/color
+    per-line when burning subtitles.
     """
     items = []
     for chunk in chunks:
@@ -269,8 +339,9 @@ def _flatten_to_items(chunks: list[dict]) -> list[dict]:
             start = seg["new_start"] if "new_start" in seg else seg["start"]
             end   = seg["new_end"] if "new_end" in seg else seg["end"]
             text  = seg["text"].strip()
+            style = seg.get("style", "default")
             if text and (end - start) > 0.1:
-                items.append({"start": start, "end": end, "text": text})
+                items.append({"start": start, "end": end, "text": text, "style": style})
     return items
 
 
@@ -371,6 +442,7 @@ def _draw_highlighted_text(
     active_word: int,
     word_offset: int,
     outline: bool,
+    base_color: tuple = (255, 255, 255),
 ) -> None:
     x, y = xy
     word_index = word_offset
@@ -381,7 +453,7 @@ def _draw_highlighted_text(
         elif is_word and word_index == active_word:
             fill = (*config.SUBTITLE_HIGHLIGHT_COLOR, 255)
         else:
-            fill = (255, 255, 255, 255)
+            fill = (*base_color, 255)
 
         _draw_mixed_text(draw, (x, y), token, primary_font, fallback_font, fill)
         token_w, _ = _mixed_text_size(draw, token, primary_font, fallback_font)

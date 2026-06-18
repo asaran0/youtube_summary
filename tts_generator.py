@@ -52,8 +52,13 @@ def generate_tts_audio(selected_chunks: list[dict]) -> str:
     """
     ensure_dirs(config.TEMP_DIR)
 
-    # Extract ordered text from chunks
-    texts = [chunk["text"].strip() for chunk in selected_chunks if chunk["text"].strip()]
+    # Extract ordered text from chunks — silent chunks (e.g. Q&A countdown)
+    # are skipped here; they get manual silence inserted during retiming.
+    texts = [
+        chunk["text"].strip()
+        for chunk in selected_chunks
+        if chunk["text"].strip() and not chunk.get("is_silent")
+    ]
     cache_key = _tts_cache_key(texts)
     output_path = os.path.join(config.TEMP_DIR, f"tts_audio_{cache_key}.wav")
     timings_path = os.path.join(config.TEMP_DIR, f"tts_timings_{cache_key}.json")
@@ -401,6 +406,93 @@ _EN_TO_HI_PHONETIC: dict[str, str] = {
     "energy": "एनर्जी",
     "science": "साइंस",
     "technology": "टेक्नोलॉजी",
+
+    # Programming / Computer Science (interview prep mode)
+    "java": "जावा",
+    "javac": "जावा सी",
+    "jdk": "जे डी के",
+    "jre": "जे आर ई",
+    "jvm": "जे वी एम",
+    "virtual": "वर्चुअल",
+    "machine": "मशीन",
+    "runtime": "रनटाइम",
+    "environment": "एनवायरनमेंट",
+    "development": "डेवलपमेंट",
+    "kit": "किट",
+    "write": "राइट",
+    "once": "वंस",
+    "run": "रन",
+    "anywhere": "एनीव्हेयर",
+    "wora": "वोरा",
+    "platform": "प्लेटफॉर्म",
+    "independent": "इंडिपेंडेंट",
+    "byte": "बाइट",
+    "bytecode": "बाइटकोड",
+    "compiler": "कंपाइलर",
+    "compile": "कंपाइल",
+    "code": "कोड",
+    "object": "ऑब्जेक्ट",
+    "oriented": "ओरिएंटेड",
+    "oops": "ओओपीएस",
+    "encapsulation": "एनकैप्सुलेशन",
+    "abstraction": "एब्स्ट्रैक्शन",
+    "abstract": "एब्स्ट्रैक्ट",
+    "inheritance": "इनहेरिटेंस",
+    "polymorphism": "पॉलीमॉर्फिज्म",
+    "polymorphic": "पॉलीमॉर्फिक",
+    "interface": "इंटरफेस",
+    "implement": "इम्प्लीमेंट",
+    "class": "क्लास",
+    "subclass": "सबक्लास",
+    "superclass": "सुपरक्लास",
+    "method": "मेथड",
+    "overload": "ओवरलोड",
+    "overloading": "ओवरलोडिंग",
+    "override": "ओवरराइड",
+    "overriding": "ओवरराइडिंग",
+    "string": "स्ट्रिंग",
+    "stringbuffer": "स्ट्रिंगबफर",
+    "stringbuilder": "स्ट्रिंगबिल्डर",
+    "buffer": "बफर",
+    "builder": "बिल्डर",
+    "immutable": "इम्यूटेबल",
+    "mutable": "म्यूटेबल",
+    "thread": "थ्रेड",
+    "safe": "सेफ",
+    "final": "फाइनल",
+    "finally": "फाइनली",
+    "finalize": "फाइनलाइज़",
+    "keyword": "कीवर्ड",
+    "variable": "वेरिएबल",
+    "value": "वैल्यू",
+    "garbage": "गारबेज",
+    "collector": "कलेक्टर",
+    "collection": "कलेक्शन",
+    "gc": "जी सी",
+    "heap": "हीप",
+    "memory": "मेमोरी",
+    "management": "मैनेजमेंट",
+    "automatic": "ऑटोमैटिक",
+    "reference": "रेफरेंस",
+    "single": "सिंगल",
+    "multiple": "मल्टीपल",
+    "exception": "एक्सेप्शन",
+    "exceptions": "एक्सेप्शंस",
+    "checked": "चेक्ड",
+    "unchecked": "अनचेक्ड",
+    "try": "ट्राय",
+    "catch": "कैच",
+    "throw": "थ्रो",
+    "throws": "थ्रोज़",
+    "handle": "हैंडल",
+    "handling": "हैंडलिंग",
+    "ioexception": "आई ओ एक्सेप्शन",
+    "sqlexception": "एस क्यू एल एक्सेप्शन",
+    "nullpointerexception": "नल पॉइंटर एक्सेप्शन",
+    "arithmeticexception": "एरिथमेटिक एक्सेप्शन",
+    "compile-time": "कंपाइल टाइम",
+    "run-time": "रन टाइम",
+    "thread-safe": "थ्रेड सेफ",
 }
 
 
@@ -409,9 +501,13 @@ def _transliterate_english_in_hindi(text: str) -> str:
     Replace English words inside Hindi text with their Hindi phonetic equivalents.
 
     Strategy (in order):
-    1. Dictionary lookup for known words (most accurate, covers common terms).
-    2. For unknown English words, wrap them so Lekha reads letter-by-letter
-       (better than garbled pronunciation).
+    1. Dictionary lookup for known words (most accurate, covers common
+       terms plus programming/CS terms for interview-prep content).
+    2. Genuine acronyms (ALL CAPS, 2-6 letters, e.g. "API", "SQL") that
+       aren't in the dictionary → spelled out letter-by-letter.
+    3. Any other unknown word (lowercase/mixed-case real words) → left
+       as-is for Lekha/MMS to attempt, since letter-spelling a real word
+       like "try" or "final" sounds far worse than an imperfect attempt.
 
     Works on mixed-script sentences like:
         "आज का video बहुत अच्छा था"
@@ -422,6 +518,15 @@ def _transliterate_english_in_hindi(text: str) -> str:
     # Match sequences of ASCII letters (English words), case-insensitive
     english_word_re = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)*")
 
+    letter_map = {
+        "a": "ए", "b": "बी", "c": "सी", "d": "डी", "e": "ई",
+        "f": "एफ", "g": "जी", "h": "एच", "i": "आई", "j": "जे",
+        "k": "के", "l": "एल", "m": "एम", "n": "एन", "o": "ओ",
+        "p": "पी", "q": "क्यू", "r": "आर", "s": "एस", "t": "टी",
+        "u": "यू", "v": "वी", "w": "डब्ल्यू", "x": "एक्स",
+        "y": "वाई", "z": "ज़ेड",
+    }
+
     def replace_word(match: re.Match) -> str:
         word = match.group(0)
         lower = word.lower()
@@ -430,23 +535,15 @@ def _transliterate_english_in_hindi(text: str) -> str:
         if lower in _EN_TO_HI_PHONETIC:
             return _EN_TO_HI_PHONETIC[lower]
 
-        # 2. Unknown word → spell it out with spaces so voice reads each letter
-        #    clearly rather than attempting broken Hindi pronunciation.
-        #    Example: "API" → "ए पी आई"
-        letter_map = {
-            "a": "ए", "b": "बी", "c": "सी", "d": "डी", "e": "ई",
-            "f": "एफ", "g": "जी", "h": "एच", "i": "आई", "j": "जे",
-            "k": "के", "l": "एल", "m": "एम", "n": "एन", "o": "ओ",
-            "p": "पी", "q": "क्यू", "r": "आर", "s": "एस", "t": "टी",
-            "u": "यू", "v": "वी", "w": "डब्ल्यू", "x": "एक्स",
-            "y": "वाई", "z": "ज़ेड",
-        }
-        # If it's a short acronym (≤4 chars, all caps or mixed), spell it out
-        if len(word) <= 5:
-            spelled = " ".join(letter_map.get(c.lower(), c) for c in word)
-            return spelled
+        # 2. Genuine acronym not in dictionary (ALL CAPS, short) →
+        #    spell out letter-by-letter. Real words like "try", "final",
+        #    "class" are lowercase/mixed-case and skip this branch.
+        is_all_caps_acronym = word.isupper() and 2 <= len(word) <= 6
+        if is_all_caps_acronym:
+            return " ".join(letter_map.get(c.lower(), c) for c in word)
 
-        # Longer unknown word → keep as-is (Lekha handles some English)
+        # 3. Unknown real word (any case) → leave as-is. Lekha/MMS will
+        #    attempt it; this sounds better than forced letter-spelling.
         return word
 
     return english_word_re.sub(replace_word, text)
@@ -631,6 +728,27 @@ def _retime_chunks_for_tts(chunks: list[dict], timings: list) -> None:
     timing_iter = iter(timings)
 
     for chunk in chunks:
+        # ── Silent chunk (e.g. Q&A countdown): no TTS, fixed duration ──
+        if chunk.get("is_silent"):
+            dur = max(chunk.get("silent_duration", 1.0), 0.1)
+            display = chunk.get("display_text", chunk.get("text", ""))
+            chunk["source_new_start"] = chunk.get("new_start", chunk.get("start", 0.0))
+            chunk["new_start"] = current
+            chunk["new_end"] = current + dur
+            chunk["segments"] = [{
+                "id": chunk.get("id", 0),
+                "start": chunk.get("start", 0.0),
+                "end": chunk.get("end", 0.0),
+                "text": display,
+                "avg_logprob": chunk.get("avg_logprob", 0.0),
+                "no_speech_prob": chunk.get("no_speech_prob", 0.0),
+                "new_start": current,
+                "new_end": current + dur,
+                "style": chunk.get("style", "default"),
+            }]
+            current = chunk["new_end"] + pause
+            continue
+
         if not chunk.get("text", "").strip():
             continue
 
@@ -649,16 +767,21 @@ def _retime_chunks_for_tts(chunks: list[dict], timings: list) -> None:
         chunk["source_new_start"] = old_start
         chunk["new_start"] = current
         chunk["new_end"] = current + dur
+
+        # display_text overrides spoken text for what's drawn on screen
+        # (used in Q&A mode: spoken question != displayed "प्रश्न 1: ...")
+        display_text = chunk.get("display_text", chunk["text"])
         chunk["segments"] = [
             {
                 "id": chunk.get("id", 0),
                 "start": chunk.get("start", 0.0),
                 "end": chunk.get("end", 0.0),
-                "text": phrase.get("text", chunk["text"]),
+                "text": display_text if len(phrases) == 1 else phrase.get("text", chunk["text"]),
                 "avg_logprob": chunk.get("avg_logprob", 0.0),
                 "no_speech_prob": chunk.get("no_speech_prob", 0.0),
                 "new_start": current + phrase.get("start", 0.0),
                 "new_end": current + phrase.get("end", dur),
+                "style": chunk.get("style", "default"),
             }
             for phrase in phrases
             if phrase.get("text")

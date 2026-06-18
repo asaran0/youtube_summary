@@ -82,8 +82,14 @@ def select_segments(segments: list[dict], total_duration: float) -> dict:
         sum(_chunk_dur(c) for c in intro_chunks) +
         sum(_chunk_dur(c) for c in outro_chunks)
     )
-    body_target = total_duration * config.TARGET_RATIO - forced_duration
-    body_target = max(body_target, 0)
+    if total_duration <= 0 or config.TARGET_RATIO >= 1.0:
+        # Unknown duration (text/Q&A mode, before TTS runs) or explicit
+        # "keep everything" mode — don't compute a body budget that could
+        # come out as 0 and silently drop every chunk. Keep all of them.
+        body_target = float("inf")
+    else:
+        body_target = total_duration * config.TARGET_RATIO - forced_duration
+        body_target = max(body_target, 0)
 
     # 5. Greedy selection of body chunks by score
     selected_body = _greedy_select(body_chunks, body_target)
@@ -235,48 +241,50 @@ def _score_chunk(chunk: dict, idf: dict, total_dur: float) -> float:
 # ─────────────────────────────────────────────────────────────
 
 def _split_intro_outro(chunks, total_dur):
-    """Force-include intro and outro chunks."""
+    """
+    Force-include intro and outro chunks.
+
+    Guard: if total_dur is unknown (0.0 — happens in text/Q&A modes
+    where duration isn't known until after TTS runs), skip intro/outro
+    forcing entirely. Otherwise outro_start would go negative and every
+    chunk would match both windows, duplicating the whole transcript.
+    """
+    if total_dur <= 0:
+        return [], list(chunks), []
+
     intro_end   = config.KEEP_INTRO_SECONDS
     outro_start = total_dur - config.KEEP_OUTRO_SECONDS
 
     intro  = [c for c in chunks if c["start"] < intro_end]
-    outro  = [c for c in chunks if c["end"]   > outro_start]
+    outro  = [c for c in chunks if c["end"]   > outro_start and c not in intro]
     body   = [c for c in chunks if c not in intro and c not in outro]
     return intro, body, outro
 
 
-# def _greedy_select(chunks: list[dict], target_dur: float) -> list[dict]:
-#     """Select chunks greedily by descending score until target_dur is filled."""
-#     sorted_chunks = sorted(chunks, key=lambda c: c["score"], reverse=True)
-#     selected = []
-#     total    = 0.0
-#     for chunk in sorted_chunks:
-#         dur = _chunk_dur(chunk)
-#         if total + dur <= target_dur:
-#             selected.append(chunk)
-#             total += dur
-#         if total >= target_dur:
-#             break
-#     return selected
-
 def _greedy_select(chunks: list[dict], target_dur: float) -> list[dict]:
     """
-    When TARGET_RATIO == 1.0, return ALL chunks (full transcript mode).
-    Otherwise select greedily by score until target_dur is filled.
-    """
-    if config.TARGET_RATIO >= 1.0:
-        return chunks          # ← pass everything through, no filtering
+    Select chunks greedily by descending score until target_dur is filled.
 
+    If TARGET_RATIO >= 1.0 (keep everything) or target_dur is infinite/
+    unbounded, every chunk is returned — no scoring/filtering applied.
+    This is what makes text-file and Q&A modes pass every sentence
+    through untouched instead of risking an empty selection.
+    """
+    if config.TARGET_RATIO >= 1.0 or target_dur == float("inf"):
+        return list(chunks)
+
+    sorted_chunks = sorted(chunks, key=lambda c: c["score"], reverse=True)
     selected = []
-    total = 0.0
-    for chunk in sorted(chunks, key=lambda c: c["score"], reverse=True):
-        dur = chunk.get("end", 0) - chunk.get("start", 0)
+    total    = 0.0
+    for chunk in sorted_chunks:
+        dur = _chunk_dur(chunk)
         if total + dur <= target_dur:
             selected.append(chunk)
             total += dur
         if total >= target_dur:
             break
     return selected
+
 
 # ─────────────────────────────────────────────────────────────
 #  TIMESTAMP REMAPPING

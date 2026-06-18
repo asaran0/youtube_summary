@@ -115,6 +115,28 @@ SUBTITLE_MAX_WIDTH_RATIO = 0.86    # actual burned-in text wraps to this
                                     # font-size independent, no change needed
 
 # ─────────────────────────────────────────────────────────────
+#  Q&A / INTERVIEW MODE STYLING
+# ─────────────────────────────────────────────────────────────
+QA_SHOW_QUESTION_LABEL = True       # show "प्रश्न 1: ..." prefix on screen
+QA_QUESTION_LABEL_TEMPLATE = "प्रश्न {n}: "   # {n} = question number, 1-based
+
+QA_QUESTION_FONT_SIZE = round(SUBTITLE_FONT_SIZE * 1.25)   # bigger than answer
+QA_QUESTION_FONT_COLOR = (255, 200, 40)    # yellow/gold (R, G, B)
+QA_ANSWER_FONT_SIZE   = SUBTITLE_FONT_SIZE
+QA_ANSWER_FONT_COLOR  = (255, 255, 255)    # white, same as normal subtitles
+
+# Silent "try it yourself" prompt — shown right after the question,
+# before the countdown. Nothing is spoken during this slide.
+QA_TRY_YOURSELF_SECONDS = 2
+QA_TRY_YOURSELF_TEXT = "रुकिए और पहले खुद उत्तर देने की कोशिश करें"
+QA_TRY_YOURSELF_FONT_SIZE = SUBTITLE_FONT_SIZE
+QA_TRY_YOURSELF_FONT_COLOR = (255, 255, 255)   # white
+
+QA_COUNTDOWN_SECONDS  = 3           # pause length before answer starts
+QA_COUNTDOWN_FONT_SIZE = round(SUBTITLE_FONT_SIZE * 1.6)
+QA_COUNTDOWN_FONT_COLOR = (255, 200, 40)   # matches question color
+
+# ─────────────────────────────────────────────────────────────
 #  STORYTELLING SCRIPT STYLE
 # ─────────────────────────────────────────────────────────────
 STORYTELLING_MODE = True

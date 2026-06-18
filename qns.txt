@@ -2,30 +2,3 @@ Here are 10 essential Java interview questions and answers in English, following
 
 Q: What is Java and what are its main features?
 A: Java is a high-level, object-oriented, and secure programming language. Its most prominent feature is "Write Once, Run Anywhere" (WORA), which means that compiled Java code can run on all platforms that support Java without the need for recompilation, thanks to the JVM (Java Virtual Machine).
-
-Q: What is the difference between JDK, JRE, and JVM?
-A: JVM (Java Virtual Machine) is the engine that drives the Java code by converting bytecode into machine language. JRE (Java Runtime Environment) is a software package that provides the JVM along with Java binaries and other libraries to run a Java application. JDK (Java Development Kit) is a full-featured software development kit that includes the JRE plus development tools like the compiler (javac) and debuggers needed to write and compile Java programs.
-
-Q: Why is Java called a "Platform Independent" language?
-A: Java is platform-independent because the Java compiler does not convert source code directly into machine-specific code. Instead, it compiles the code into an intermediate format called 'bytecode' (.class file). This bytecode is non-executable on its own and requires a platform-specific JVM to interpret and run it. Since every operating system has its own JVM, the same bytecode can run seamlessly across Windows, Linux, and Mac.
-
-Q: What are the four main pillars of Object-Oriented Programming (OOPs) in Java?
-A: The four main pillars are: 1. Encapsulation (binding data variables and methods together into a single unit), 2. Abstraction (hiding complex internal implementation details and showing only the essential features), 3. Inheritance (the mechanism where one class acquires the properties and behaviors of a parent class), and 4. Polymorphism (the ability of a single action to behave differently in different contexts, like method overloading or overriding).
-
-Q: What is the difference between String and StringBuffer/StringBuilder?
-A: In Java, the String class is immutable, meaning once a String object is created, its value cannot be changed; any modification creates a completely new String object in memory. On the other hand, StringBuffer and StringBuilder are mutable, allowing you to modify the string without creating new objects. Furthermore, StringBuffer is thread-safe (synchronized), whereas StringBuilder is not thread-safe but is faster as a result.
-
-Q: What is the difference between 'final', 'finally', and 'finalize'?
-A: 'final' is a keyword used to apply restrictions: a final variable cannot be reassigned, a final method cannot be overridden, and a final class cannot be inherited. 'finally' is a block used in exception handling (try-catch) that executes critical cleanup code regardless of whether an exception is thrown or handled. 'finalize' is a protected method of the Object class that the Garbage Collector calls just before destroying an object to perform cleanup operations.
-
-Q: What is the difference between Method Overloading and Method Overriding?
-A: Method Overloading happens within the same class when multiple methods have the same name but different parameter lists (it represents compile-time or static polymorphism). Method Overriding happens when a subclass provides a specific implementation for a method that is already defined in its parent class, using the exact same name and parameters (it represents run-time or dynamic polymorphism).
-
-Q: How does Garbage Collection work in Java?
-A: Garbage Collection in Java is an automatic memory management process. The Garbage Collector (GC) runs implicitly in the background on the JVM heap memory. It tracks down and identifies objects that are no longer reachable or referenced by any part of the running program and destroys them to reclaim free memory space, preventing memory leaks.
-
-Q: What is the difference between an Abstract Class and an Interface?
-A: An abstract class can have both abstract methods (without a body) and concrete methods (with a body), can have instance variables, and supports single inheritance. An interface, historically, could only have abstract methods (though Java 8+ allows default and static methods) and only static final variables. A class can implement multiple interfaces, allowing Java to achieve multiple inheritance.
-
-Q: What is the difference between 'Checked' and 'Unchecked' exceptions?
-A: Checked exceptions are checked by the compiler at compile-time, meaning the developer is forced to handle them using a try-catch block or declare them using the 'throws' keyword (e.g., IOException, SQLException). Unchecked exceptions occur at runtime and are not verified by the compiler during compilation (e.g., NullPointerException, ArithmeticException, ArrayIndexOutOfBoundsException); they usually happen due to programming logic flaws.
