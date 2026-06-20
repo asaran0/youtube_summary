@@ -1,41 +1,48 @@
-# ─────────────────────────────────────────────────────────────
-# requirements.txt — Hindi YouTube Video Summarizer
-#
-# Install with:
-#   pip install -r requirements.txt
-#
-# On macOS M1 (Apple Silicon) run first:
-#   pip install --upgrade pip
-# ─────────────────────────────────────────────────────────────
+# ============================================================
+# Hindi & English YouTube Video Summarizer + XTTS v2
+# Python: 3.11.x
+# Platform: macOS Apple Silicon (M1/M2/M3)
+# ============================================================
 
-# ── Video download ────────────────────────────────────────────
-yt-dlp>=2024.1.1
+# ---------- Video Download ----------
+yt-dlp>=2025.1.15
 
-# ── Audio transcription (runs locally, no API key needed) ────
+# ---------- Speech Recognition ----------
 openai-whisper>=20231117
 
-# ── Deep learning backend (Whisper uses PyTorch) ─────────────
-# For M1 Mac: torch will automatically use MPS (Metal GPU)
-torch>=2.1.0
+# ---------- Deep Learning ----------
+torch>=2.3.0
+torchaudio>=2.3.0
+torchvision>=0.18.0
 
-# ── Video editing ─────────────────────────────────────────────
+# ---------- XTTS v2 ----------
+TTS==0.22.0
+
+# ---------- Transformers ----------
+transformers>=4.41.0
+accelerate>=0.31.0
+tokenizers>=0.19.1
+sentencepiece>=0.2.0
+safetensors>=0.4.3
+
+# ---------- Audio ----------
+soundfile>=0.12.1
+librosa>=0.10.2
+pydub>=0.25.1
+
+# ---------- Video Editing ----------
 moviepy>=1.0.3
+imageio>=2.37.0
+imageio-ffmpeg>=0.6.0
 
-# ── Image / banner generation ────────────────────────────────
-Pillow>=10.0.0
+# ---------- Images ----------
+Pillow>=10.3.0
 
-# ── Numerics (used by moviepy, numpy arrays for banners) ─────
-numpy>=1.24.0
+# ---------- Numerics ----------
+numpy<2.0
+scipy>=1.13.0
 
-# ── Progress bars (used by yt-dlp and whisper internally) ────
-tqdm>=4.65.0
-
-# ── ffmpeg Python bindings (optional, used as fallback) ──────
+# ---------- Utilities ----------
+tqdm>=4.66.0
 ffmpeg-python>=0.2.0
-
-# ─────────────────────────────────────────────────────────────
-# System dependency (NOT pip-installed):
-#   brew install ffmpeg
-#
-# ffmpeg must be available on PATH before running the project.
-# ─────────────────────────────────────────────────────────────
+requests>=2.32.0

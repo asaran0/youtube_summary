@@ -88,8 +88,10 @@ Examples:
                    help=f"Language (default: {config.LANGUAGE})")
     p.add_argument("--voice", default=None,
                    help="macOS TTS voice name")
-    p.add_argument("--tts-backend", choices=["macos", "mms"], default=config.TTS_BACKEND,
+    p.add_argument("--tts-backend", choices=["xtts", "macos", "mms"], default=config.TTS_BACKEND,
                    help=f"TTS backend (default: {config.TTS_BACKEND})")
+    p.add_argument("--voice-sample", default=None, metavar="WAV",
+                   help="Path to your voice sample WAV (xtts backend only)")
     p.add_argument("--format", choices=["auto", "youtube", "reel"], default=config.OUTPUT_FORMAT,
                    help=f"Output layout (default: {config.OUTPUT_FORMAT})")
     p.add_argument("--keep-temp", action="store_true",
@@ -114,6 +116,7 @@ def _apply_config(args: argparse.Namespace) -> None:
     config.LANGUAGE        = args.language
     config.MACOS_TTS_VOICE = args.voice or config.MACOS_TTS_VOICES.get(args.language, config.MACOS_TTS_VOICE)
     config.TTS_BACKEND     = args.tts_backend
+    config.XTTS_VOICE_SAMPLE = args.voice_sample or config.XTTS_VOICE_SAMPLE
     config.OUTPUT_FORMAT   = args.format
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -124,9 +127,36 @@ def _shared_setup() -> str:
     log.info("Checking dependencies …")
     check_system_deps()
     check_python_deps()
+    _check_xtts_deps_if_needed()
     ensure_dirs(config.OUTPUT_DIR, config.TEMP_DIR, config.ASSETS_DIR)
     log.info("Looking for Hindi font …")
     return find_hindi_font()
+
+
+def _check_xtts_deps_if_needed() -> None:
+    """
+    Fail fast with a clear message if TTS_BACKEND is "xtts" but either
+    the Coqui TTS package isn't installed or the voice sample WAV is
+    missing — rather than failing deep inside tts_generator.py.
+    """
+    if config.TTS_BACKEND != "xtts":
+        return
+
+    try:
+        import TTS  # noqa: F401
+    except ImportError:
+        log.error("TTS_BACKEND is 'xtts' but the Coqui TTS package isn't installed.")
+        log.error("Install with:  pip install TTS")
+        sys.exit(1)
+
+    sample = getattr(config, "XTTS_VOICE_SAMPLE", None)
+    if not sample or not os.path.exists(sample):
+        log.error("TTS_BACKEND is 'xtts' but no voice sample was found at: %s", sample)
+        log.error("Set config.XTTS_VOICE_SAMPLE or pass --voice-sample to a WAV "
+                   "of your own voice (10-30 seconds, quiet room).")
+        sys.exit(1)
+
+    log.info("XTTS voice sample ✓ → %s", sample)
 
 
 # ─────────────────────────────────────────────────────────────

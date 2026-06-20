@@ -1,21 +1,28 @@
 """
 tts_generator.py — Generate Hindi speech from transcript text (fully offline).
 
-Two backends are supported (priority order):
+Three backends are supported:
 
-  1. MMS-TTS  (Meta Massively Multilingual Speech)
+  1. Coqui XTTS-v2  (voice cloning, best realism)
+       Model : coqui/XTTS-v2  (~2 GB, auto-downloaded once)
+       Quality: ★★★★★  — clones your own voice from a short sample
+       Speed  : fast on Apple Silicon (MPS), slow on CPU-only machines
+       Needs  : TTS  (pip install TTS), a clean voice sample WAV
+
+  2. MMS-TTS  (Meta Massively Multilingual Speech)
        Model : facebook/mms-tts-hin  (~500 MB, auto-downloaded once)
-       Quality: ★★★★☆  — neural, natural-sounding Hindi
+       Quality: ★★★★☆  — neural, natural-sounding Hindi, no cloning
        Speed  : medium  (uses Apple MPS on M1)
        Needs  : transformers, torch
 
-  2. macOS built-in Lekha voice  (fallback)
+  3. macOS built-in Lekha voice  (fallback)
        Model : Apple Neural TTS, built-in to macOS
        Quality: ★★★☆☆  — good, available with zero setup
        Speed  : fast
        Needs  : nothing extra
 
-Configure which backend to use in config.py  →  TTS_BACKEND
+Configure which backend to use in config.py  →  TTS_BACKEND  ("xtts" / "mms" / "macos")
+For "xtts", also set config.XTTS_VOICE_SAMPLE to a WAV file of your own voice.
 
 The module takes the selected transcript chunks, generates one WAV per chunk,
 then stitches them together with short natural pauses between sentences.
@@ -71,14 +78,16 @@ def generate_tts_audio(selected_chunks: list[dict]) -> str:
     log.info("Generating TTS for %d text segments …", len(texts))
     log.info("Backend: %s", config.TTS_BACKEND)
 
-    if config.TTS_BACKEND == "mms":
+    if config.TTS_BACKEND == "xtts":
+        durations = _generate_xtts(texts, output_path)
+    elif config.TTS_BACKEND == "mms":
         durations = _generate_mms(texts, output_path)
     elif config.TTS_BACKEND == "macos":
         durations = _generate_macos(texts, output_path)
     else:
         raise ValueError(
             f"Unknown TTS_BACKEND '{config.TTS_BACKEND}'. "
-            "Choose 'mms' or 'macos' in config.py"
+            "Choose 'xtts', 'mms', or 'macos' in config.py"
         )
 
     _retime_chunks_for_tts(selected_chunks, durations)
@@ -100,7 +109,109 @@ def get_tts_duration(tts_wav_path: str) -> float:
 
 
 # ─────────────────────────────────────────────────────────────
-#  BACKEND 1 — META MMS-TTS  (best quality, offline after first download)
+#  BACKEND 0 — COQUI XTTS-v2  (voice cloning, best realism, offline)
+# ─────────────────────────────────────────────────────────────
+
+def _generate_xtts(texts: list[str], output_path: str) -> list[dict]:
+    """
+    Use Coqui XTTS-v2 to clone config.XTTS_VOICE_SAMPLE and speak the
+    given Hindi texts in that voice. Runs fully offline after the model
+    is downloaded once (~2 GB, cached by the TTS library).
+
+    On Apple Silicon, MPS acceleration is used automatically when
+    available, making this fast enough for regular use. CPU-only
+    machines will work but generation is noticeably slower.
+    """
+    import torch
+    import scipy.io.wavfile as wavfile
+
+    try:
+        from TTS.api import TTS
+    except ImportError:
+        raise RuntimeError(
+            "Coqui TTS is not installed. Run:  pip install TTS\n"
+            "Then set config.TTS_BACKEND = 'xtts' and "
+            "config.XTTS_VOICE_SAMPLE to a WAV of your voice."
+        )
+
+    voice_sample = getattr(config, "XTTS_VOICE_SAMPLE", None)
+    if not voice_sample or not os.path.exists(voice_sample):
+        raise RuntimeError(
+            f"config.XTTS_VOICE_SAMPLE not found: {voice_sample!r}. "
+            "Set it to the path of a clean 10-30 second WAV recording "
+            "of your own voice."
+        )
+
+    # Apple Silicon: use MPS if available, else CPU. XTTS does not
+    # support CUDA-only ops differently here — same call works for both.
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    log.info("Loading Coqui XTTS-v2 model (first run downloads ~2 GB) …")
+    log.info("TTS device: %s", device)
+
+    tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+
+    sample_rate = 24000   # XTTS-v2 always outputs at 24 kHz
+    pause_samples = int(sample_rate * config.TTS_PAUSE_BETWEEN_SEGMENTS)
+
+    all_audio = []
+    timings = []
+    xtts_language = "hi" if config.LANGUAGE == "hi" else "en"
+
+    for i, text in enumerate(texts, 1):
+        log.info("  XTTS %d/%d: %s …", i, len(texts), text[:50])
+        text = _clean_text_for_tts(text)
+        if not text:
+            continue
+
+        try:
+            wav_list = tts.tts(
+                text=text,
+                speaker_wav=voice_sample,
+                language=xtts_language,
+            )
+            waveform = np.array(wav_list, dtype=np.float32)
+            all_audio.append(waveform)
+            dur = len(waveform) / sample_rate
+            timings.append({
+                "duration": dur,
+                "phrases": [{"text": text, "start": 0.0, "end": dur}],
+            })
+
+            pause = np.zeros(pause_samples, dtype=np.float32)
+            all_audio.append(pause)
+
+        except Exception as e:
+            log.warning("XTTS failed for segment %d: %s", i, e)
+            silence = np.zeros(int(sample_rate * 2), dtype=np.float32)
+            all_audio.append(silence)
+            timings.append({
+                "duration": 2.0,
+                "phrases": [{"text": text, "start": 0.0, "end": 2.0}],
+            })
+
+    if not all_audio:
+        raise RuntimeError("XTTS produced no audio output")
+
+    combined = np.concatenate(all_audio).astype(np.float32)
+
+    max_val = np.max(np.abs(combined))
+    if max_val > 0:
+        combined = combined / max_val * 0.85
+
+    combined_int16 = (combined * 32767).astype(np.int16)
+
+    tmp_wav = os.path.join(config.TEMP_DIR, "tts_raw_xtts.wav")
+    wavfile.write(tmp_wav, sample_rate, combined_int16)
+
+    resampled_wav = os.path.join(config.TEMP_DIR, "tts_xtts_resampled.wav")
+    _resample_wav(tmp_wav, resampled_wav, target_rate=44100)
+    _polish_audio(resampled_wav, output_path)
+    log.info("XTTS-v2 generation complete.")
+    return timings
+
+
+# ─────────────────────────────────────────────────────────────
+#  BACKEND 1 — META MMS-TTS  (best quality without cloning, offline)
 # ─────────────────────────────────────────────────────────────
 
 def _generate_mms(texts: list[str], output_path: str) -> list[float]:

@@ -18,16 +18,21 @@ WHISPER_MODEL = "medium"
 
 # Output language. Supported values: "hi" and "en".
 # "hi" transcribes Hindi. "en" uses Whisper translate mode for English output.
-# LANGUAGE = "hi"
 LANGUAGE = "en"
 
 # ─────────────────────────────────────────────────────────────
 #  NARRATION / TTS
 # ─────────────────────────────────────────────────────────────
-# "macos" supports configurable installed system voices.
-# "mms" is neural/offline after model download, but has one voice per language.
-TTS_BACKEND = "macos"
-# MACOS_TTS_VOICE = "Lekha"       # Hindi: Lekha. English examples: Samantha, Daniel
+# "xtts"  clones your own voice from a sample WAV — best realism, offline.
+# "mms"   is neural/offline after model download, but has one fixed voice.
+# "macos" supports configurable installed system voices, zero setup.
+TTS_BACKEND = "xtts"
+
+# ── XTTS-v2 voice cloning ──────────────────────────────────────
+# Path to a clean 10-30 second WAV recording of your own voice.
+# Quiet room, no music/background noise, natural speaking pace.
+XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
+
 MACOS_TTS_VOICE = "Daniel"       # Hindi: Lekha. English examples: Samantha, Daniel
 MACOS_TTS_VOICES = {
     "hi": "Lekha",

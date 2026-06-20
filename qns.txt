@@ -1,4 +1,2 @@
-Here are 10 essential Java interview questions and answers in English, following the exact same format:
-
-Q: What is Java and what are its main features?
-A: Java is a high-level, object-oriented, and secure programming language. Its most prominent feature is "Write Once, Run Anywhere" (WORA), which means that compiled Java code can run on all platforms that support Java without the need for recompilation, thanks to the JVM (Java Virtual Machine).
+Q: What is the difference between JDK, JRE, and JVM?
+A: JVM (Java Virtual Machine) is the engine that drives the Java code by converting bytecode into machine language. JRE (Java Runtime Environment) is a software package that provides the JVM along with Java binaries and other libraries to run a Java application. JDK (Java Development Kit) is a full-featured software development kit that includes the JRE plus development tools like the compiler (javac) and debuggers needed to write and compile Java programs.
