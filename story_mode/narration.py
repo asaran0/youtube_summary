@@ -1,20 +1,20 @@
 """
-narration_adapter.py - Make selected transcript chunks feel more narrative.
+story_mode/narration.py — Make selected transcript chunks feel more narrative.
 
-This is intentionally lightweight and offline. It does not invent new facts or
-call an LLM; it adds short framing/transition phrases so the generated voice
+This is intentionally lightweight and offline. It does not invent new
+facts; it adds short framing/transition phrases so the generated voice
 sounds more like an explainer than raw transcript stitching.
+
+Story-mode-specific — qa_mode has no equivalent concept since
+questions/answers are read exactly as written.
 """
 
-import config
 from utils import get_logger
 
-log = get_logger("narration")
+log = get_logger("story.narration")
 
-HINDI_INTRO = ""
-ENGLISH_INTRO = ""
-# HINDI_INTRO = "चलिए, इसे कहानी की तरह आसान भाषा में समझते हैं।"
-# ENGLISH_INTRO = "Let's understand this in a simple, story-like way."
+HINDI_INTRO = "चलिए, इसे कहानी की तरह आसान भाषा में समझते हैं।"
+ENGLISH_INTRO = "Let's understand this in a simple, story-like way."
 
 HINDI_TRANSITIONS = [
     "अब ध्यान से समझिए,",
@@ -33,13 +33,13 @@ ENGLISH_TRANSITIONS = [
 ]
 
 
-def apply_storytelling(chunks: list[dict]) -> list[dict]:
+def apply_storytelling(chunks: list[dict], cfg) -> list[dict]:
     """Add light narrative pacing to chunk text before TTS/subtitles."""
-    if not config.STORYTELLING_MODE or not chunks:
+    if not cfg.STORYTELLING_MODE or not chunks:
         return chunks
 
-    intro = ENGLISH_INTRO if config.LANGUAGE == "en" else HINDI_INTRO
-    transitions = ENGLISH_TRANSITIONS if config.LANGUAGE == "en" else HINDI_TRANSITIONS
+    intro = ENGLISH_INTRO if cfg.LANGUAGE == "en" else HINDI_INTRO
+    transitions = ENGLISH_TRANSITIONS if cfg.LANGUAGE == "en" else HINDI_TRANSITIONS
 
     transition_count = 0
     for index, chunk in enumerate(chunks):
@@ -48,11 +48,11 @@ def apply_storytelling(chunks: list[dict]) -> list[dict]:
             continue
 
         prefix = ""
-        if index == 0 and config.STORYTELLING_ADD_INTRO:
+        if index == 0 and cfg.STORYTELLING_ADD_INTRO:
             prefix = intro + " "
         elif (
-            config.STORYTELLING_ADD_TRANSITIONS
-            and transition_count < config.STORYTELLING_MAX_TRANSITIONS
+            cfg.STORYTELLING_ADD_TRANSITIONS
+            and transition_count < cfg.STORYTELLING_MAX_TRANSITIONS
             and index % 2 == 1
         ):
             prefix = transitions[transition_count % len(transitions)] + " "

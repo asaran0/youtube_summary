@@ -1,5 +1,10 @@
 """
 utils.py — Shared helper functions used across all modules.
+
+Note: this module deliberately takes `cfg` as a parameter wherever it
+needs config values, rather than importing a single global config
+module — story_mode and qa_mode each have their own config, and this
+file is shared infrastructure used by both.
 """
 
 import os
@@ -7,8 +12,6 @@ import sys
 import logging
 import subprocess
 from pathlib import Path
-
-import config
 
 
 # ─────────────────────────────────────────────────────────────
@@ -39,12 +42,12 @@ def ensure_dirs(*paths: str) -> None:
         Path(p).mkdir(parents=True, exist_ok=True)
 
 
-def clean_temp() -> None:
+def clean_temp(cfg) -> None:
     """Remove all files inside the temp directory."""
     import shutil
-    if os.path.exists(config.TEMP_DIR):
-        shutil.rmtree(config.TEMP_DIR)
-    Path(config.TEMP_DIR).mkdir(parents=True, exist_ok=True)
+    if os.path.exists(cfg.TEMP_DIR):
+        shutil.rmtree(cfg.TEMP_DIR)
+    Path(cfg.TEMP_DIR).mkdir(parents=True, exist_ok=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -118,29 +121,29 @@ def is_reel_format(filepath: str) -> bool:
 #  FONT DETECTION
 # ─────────────────────────────────────────────────────────────
 
-def find_hindi_font() -> str:
+def find_hindi_font(cfg) -> str:
     """
     Find a font file that supports Devanagari / Hindi script.
-    Searches the paths listed in config.HINDI_FONT_SEARCH_PATHS.
+    Searches the paths listed in cfg.HINDI_FONT_SEARCH_PATHS.
     Downloads Noto Sans Devanagari as a fallback.
     """
     log = get_logger("font")
 
-    for path in config.HINDI_FONT_SEARCH_PATHS:
+    for path in cfg.HINDI_FONT_SEARCH_PATHS:
         if os.path.exists(path):
             log.info("Using font: %s", path)
             return path
 
     log.warning("No Hindi font found locally. Downloading Noto Sans Devanagari …")
-    return _download_noto_devanagari()
+    return _download_noto_devanagari(cfg)
 
 
-def _download_noto_devanagari() -> str:
+def _download_noto_devanagari(cfg) -> str:
     """Download Noto Sans Devanagari Regular from Google Fonts CDN."""
     import urllib.request
 
-    ensure_dirs(config.ASSETS_DIR)
-    dest = os.path.join(config.ASSETS_DIR, "NotoSansDevanagari-Regular.ttf")
+    ensure_dirs(cfg.ASSETS_DIR)
+    dest = os.path.join(cfg.ASSETS_DIR, "NotoSansDevanagari-Regular.ttf")
 
     if os.path.exists(dest):
         return dest
@@ -195,8 +198,6 @@ def check_python_deps() -> None:
     """Check key Python packages are importable."""
     log = get_logger("deps")
     packages = {
-        "yt_dlp":    "yt-dlp",
-        "whisper":   "openai-whisper",
         "moviepy":   "moviepy",
         "PIL":       "Pillow",
         "numpy":     "numpy",
