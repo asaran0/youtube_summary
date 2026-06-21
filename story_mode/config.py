@@ -37,7 +37,7 @@ OUTPUT_FPS = 30
 # "xtts"  clones your own voice from a sample WAV — best realism, offline.
 # "mms"   neural/offline after model download, one fixed voice.
 # "macos" configurable installed system voices, zero setup.
-TTS_BACKEND = "macos"
+TTS_BACKEND = "xtts"
 
 XTTS_VOICE_SAMPLE = "assets/my_voice_sample.wav"
 

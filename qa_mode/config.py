@@ -7,7 +7,7 @@ MODE_NAME = "qa"
 # ─────────────────────────────────────────────────────────────
 #  LANGUAGE
 # ─────────────────────────────────────────────────────────────
-LANGUAGE = "hig"
+LANGUAGE = "en"
 
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
@@ -27,7 +27,7 @@ TTS_BACKEND = "macos"
 
 XTTS_VOICE_SAMPLE = "assets/my_voice_sample.wav"
 
-MACOS_TTS_VOICE = "Lekha"
+MACOS_TTS_VOICE = "Samantha"
 MACOS_TTS_VOICES = {
     "hi":  "Lekha",
     "hig": "Lekha",
@@ -61,7 +61,7 @@ EXTRA_PHONETIC_DICT: dict[str, str] = {}
 #  BACKGROUND / SLIDESHOW
 # ─────────────────────────────────────────────────────────────
 BACKGROUND_IMAGE_PATHS: list[str] = []
-BACKGROUND_DIR = "background"
+BACKGROUND_DIR = "assets/backgrounds_qa"
 
 # ─────────────────────────────────────────────────────────────
 #  CONTENT LENGTH
@@ -104,8 +104,10 @@ QA_SLIDE_QUESTION_BG    = (205, 139,  97)   # warm peach
 QA_SLIDE_ANSWER_BG      = (183, 204, 174)   # sage green
 
 # Text colours
-QA_SLIDE_QUESTION_COLOR = (30,  30,  30)
-QA_SLIDE_ANSWER_COLOR   = (30,  30,  30)
+QA_SLIDE_QUESTION_COLOR  = (30,  30,  30)
+QA_SLIDE_ANSWER_COLOR    = (30,  30,  30)
+# Highlight colour for the word currently being spoken in the answer
+QA_SLIDE_HIGHLIGHT_COLOR = (220, 120,  0)   # deep amber — readable on sage green
 
 # Font sizes in pixels
 QA_SLIDE_QUESTION_FONT_SIZE = 68

@@ -22,13 +22,6 @@ log = get_logger("qa.runner")
 
 
 def _build_qa_pairs(selected: list[dict]) -> list[dict]:
-    """
-    Collapse flat segments into one dict per Q/A pair.
-    Uses new_start/new_end (TTS-remapped) with fallback to start/end.
-    video_start = question's new_start (show question immediately)
-    ans_start   = answer segment's new_start (begin word-by-word reveal)
-    video_end   = answer segment's new_end
-    """
     pairs = []
     i = 0
     while i < len(selected):
@@ -40,7 +33,7 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
             while j < len(selected) and selected[j].get("style") != "answer":
                 j += 1
             if j < len(selected):
-                ans = selected[j]
+                ans     = selected[j]
                 a_start = ans.get("new_start", ans.get("start", 0.0))
                 a_end   = ans.get("new_end",   ans.get("end",   a_start + 1.0))
                 pairs.append({
@@ -60,7 +53,10 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
 
 
 def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_path, cfg) -> str:
-    from qa_mode.qa_slideshow import _load_fonts, _wrap_text_px, _paginate, _render_slide, _line_height, _parse_color
+    from qa_mode.qa_slideshow import (
+        _load_fonts, _wrap_text_px, _paginate, _render_slide,
+        _line_height, _parse_color, _count_words_in_lines,
+    )
     from moviepy import AudioFileClip, VideoClip
     import numpy as np
 
@@ -68,19 +64,14 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     if not qa_pairs:
         raise RuntimeError("No Q/A pairs found in selected segments")
 
-    # ── If TTS didn't set new_start/new_end, derive from audio duration ──
-    # Detect placeholder timing: video_end of last pair should roughly match audio
     audio_dur = get_video_duration(tts_audio_path)
-    last_pair = qa_pairs[-1]
-    if last_pair["video_end"] < audio_dur * 0.5:
-        # Timestamps are placeholders — redistribute evenly across audio duration
-        log.warning(
-            "Segment timestamps look like placeholders (last video_end=%.1f, audio=%.1f). "
-            "Redistributing timing proportionally.", last_pair["video_end"], audio_dur
-        )
-        total_placeholder = last_pair["video_end"]
+
+    # Rescale placeholder timestamps if TTS didn't write new_start/new_end
+    last_end = qa_pairs[-1]["video_end"]
+    if last_end < audio_dur * 0.5:
+        log.warning("Rescaling placeholder timestamps (last=%.1fs audio=%.1fs)", last_end, audio_dur)
+        scale = audio_dur / max(last_end, 0.001)
         for p in qa_pairs:
-            scale = audio_dur / max(total_placeholder, 1.0)
             p["video_start"] *= scale
             p["video_end"]   *= scale
             p["ans_start"]   *= scale
@@ -89,7 +80,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     safe_title = _safe_title(title)
     final_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}_qa.mp4")
 
-    # ── Geometry ─────────────────────────────────────────────
+    # ── Geometry ──────────────────────────────────────────────────────────
     split_ratio  = getattr(cfg, "QA_SLIDE_SPLIT_RATIO", 0.35)
     margin_top_q = int(target_h * getattr(cfg, "QA_SLIDE_MARGIN_TOP_Q",  0.04))
     margin_top_a = int(target_h * getattr(cfg, "QA_SLIDE_MARGIN_TOP_A",  0.04))
@@ -103,29 +94,39 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     a_bg    = _parse_color(getattr(cfg, "QA_SLIDE_ANSWER_BG",      (183, 204, 174)))
     q_color = _parse_color(getattr(cfg, "QA_SLIDE_QUESTION_COLOR", (30,  30,  30)))
     a_color = _parse_color(getattr(cfg, "QA_SLIDE_ANSWER_COLOR",   (30,  30,  30)))
+    hi_color = _parse_color(getattr(cfg, "QA_SLIDE_HIGHLIGHT_COLOR",
+                             getattr(cfg, "SUBTITLE_HIGHLIGHT_COLOR", (255, 178, 0))))
 
     font_q, font_a = _load_fonts(font_path, cfg)
-    text_w    = target_w - 2 * margin_side
-    a_line_h  = _line_height(font_a)
-    avail_a_h = a_band_h - margin_top_a - margin_bot_a
+    text_w      = target_w - 2 * margin_side
+    a_line_h    = _line_height(font_a)
+    avail_a_h   = a_band_h - margin_top_a - margin_bot_a
     max_a_lines = max(1, avail_a_h // (a_line_h + 4))
 
-    # ── Pre-compute per-pair data ─────────────────────────────
+    # Pre-compute per-pair data
     entries = []
     for pair in qa_pairs:
+        all_words  = pair["answer"].split()
+        all_lines  = _wrap_text_px(pair["answer"], font_a, text_w)
+        all_pages  = _paginate(all_lines, max_a_lines)
+        # Word count per page (for tracking which page a word falls on)
+        page_word_counts = [_count_words_in_lines(p) for p in all_pages]
         entries.append({
-            "q_lines":   _wrap_text_px(pair["question"], font_q, text_w),
-            "all_words": pair["answer"].split(),
-            "v_start":   pair["video_start"],
-            "v_end":     pair["video_end"],
-            "a_start":   pair["ans_start"],
-            "a_end":     pair["ans_end"],
+            "q_lines":          _wrap_text_px(pair["question"], font_q, text_w),
+            "all_words":        all_words,
+            "all_lines":        all_lines,
+            "all_pages":        all_pages,
+            "page_word_counts": page_word_counts,
+            "v_start":          pair["video_start"],
+            "v_end":            pair["video_end"],
+            "a_start":          pair["ans_start"],
+            "a_end":            pair["ans_end"],
         })
 
-    total_dur = min(entries[-1]["v_end"], audio_dur) if entries else audio_dur
-    blank     = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+    total_dur = min(entries[-1]["v_end"], audio_dur)
 
     def make_frame(t):
+        # Find current entry
         entry = None
         for e in entries:
             if e["v_start"] <= t < e["v_end"]:
@@ -134,17 +135,42 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         if entry is None:
             entry = entries[-1]
 
-        # Before answer starts → show question only, answer band empty
         if t < entry["a_start"]:
-            cur_page = []
-        else:
-            progress    = (t - entry["a_start"]) / max(entry["a_end"] - entry["a_start"], 0.001)
-            total_words = len(entry["all_words"])
-            visible_n   = min(int(progress * total_words) + 1, total_words)
-            visible_txt = " ".join(entry["all_words"][:visible_n])
-            vis_lines   = _wrap_text_px(visible_txt, font_a, text_w)
-            pages       = _paginate(vis_lines, max_a_lines)
-            cur_page    = pages[-1] if pages else []
+            # Question phase — show question, empty answer
+            img = _render_slide(
+                video_width=target_w, video_height=target_h,
+                q_band_h=q_band_h, a_band_h=a_band_h,
+                q_bg=q_bg, a_bg=a_bg,
+                q_lines=entry["q_lines"], a_lines=[],
+                font_q=font_q, font_a=font_a,
+                q_color=q_color, a_color=a_color,
+                margin_side=margin_side,
+                margin_top_q=margin_top_q, margin_top_a=margin_top_a,
+                active_word=-1, highlight_color=hi_color,
+            )
+            return np.array(img)
+
+        # Answer phase — word-by-word reveal with highlight on current word
+        ans_dur     = max(entry["a_end"] - entry["a_start"], 0.001)
+        progress    = (t - entry["a_start"]) / ans_dur
+        total_words = len(entry["all_words"])
+
+        # active_word: the word currently being spoken (highlighted)
+        # visible_words: all words shown so far (revealed = active + past)
+        active_word  = min(int(progress * total_words), total_words - 1)
+        visible_n    = active_word + 1   # show up to and including the active word
+
+        visible_text = " ".join(entry["all_words"][:visible_n])
+        vis_lines    = _wrap_text_px(visible_text, font_a, text_w)
+        pages        = _paginate(vis_lines, max_a_lines)
+        cur_page     = pages[-1] if pages else []
+
+        # active_word offset within cur_page
+        # Words before this page have already been shown; subtract them
+        words_before_page = sum(
+            _count_words_in_lines(pages[i]) for i in range(len(pages) - 1)
+        )
+        page_active = active_word - words_before_page
 
         img = _render_slide(
             video_width=target_w, video_height=target_h,
@@ -155,6 +181,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
             q_color=q_color, a_color=a_color,
             margin_side=margin_side,
             margin_top_q=margin_top_q, margin_top_a=margin_top_a,
+            active_word=page_active, highlight_color=hi_color,
         )
         return np.array(img)
 
@@ -181,7 +208,7 @@ def run(qa_path: str, title: str = "interview_prep", cfg=default_cfg, keep_temp:
 
     _step("STEP 1 / 3 — Loading Q&A file")
     selected = load_qa_file(qa_path, cfg)
-    log.info("Loaded %d question/answer pairs from %s", len(selected) // 4, qa_path)
+    log.info("Loaded %d question/answer pairs", len(selected) // 4)
 
     _step("STEP 2 / 3 — Generating narration")
     tts_audio_path = generate_tts_audio(selected, cfg)
@@ -195,17 +222,13 @@ def run(qa_path: str, title: str = "interview_prep", cfg=default_cfg, keep_temp:
 
     srt_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}.srt")
     ass_path = subtitle_render.generate_subtitle_files(
-        selected_chunks=selected,
-        output_srt_path=srt_path,
-        font_path=font_path,
-        video_width=target_w,
-        video_height=target_h,
-        cfg=cfg,
-        style_resolver=resolve_style,
+        selected_chunks=selected, output_srt_path=srt_path,
+        font_path=font_path, video_width=target_w, video_height=target_h,
+        cfg=cfg, style_resolver=resolve_style,
     )
 
     if use_split:
-        log.info("Using split-layout renderer")
+        log.info("Split-layout renderer (lang=%s, highlight=ON)", getattr(cfg, "LANGUAGE", "?"))
         final_video_path = _run_split_layout(
             selected, tts_audio_path, title, target_w, target_h, font_path, cfg,
         )
@@ -232,15 +255,17 @@ def run(qa_path: str, title: str = "interview_prep", cfg=default_cfg, keep_temp:
         clean_temp(cfg)
 
     log.info("Total time: %s", human_duration(time.time() - total_start))
-    return {"video_path": final_video_path, "srt_path": srt_path,
-            "meta_path": meta_path, "summary_duration": summary_dur}
+    return {
+        "video_path": final_video_path, "srt_path": srt_path,
+        "meta_path": meta_path, "summary_duration": summary_dur,
+    }
 
 
-def _step(msg: str) -> None:
-    print(f"\n{'─' * 60}\n  {msg}\n{'─' * 60}")
+def _step(msg):
+    print(f"\n{'─'*60}\n  {msg}\n{'─'*60}")
 
 
-def _safe_title(title: str, max_len: int = 40) -> str:
+def _safe_title(title, max_len=40):
     import re
     safe = re.sub(r"[^\w\s\-]", "", title)
     safe = re.sub(r"\s+", "_", safe.strip())
