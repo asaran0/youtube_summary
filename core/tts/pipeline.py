@@ -3,14 +3,24 @@ core/tts/pipeline.py — Public TTS entry point.
 
 This is what story_mode and qa_mode actually call. It handles caching,
 dispatches to whichever TTSStrategy the active mode config selected
-(via cfg.TTS_BACKEND), and retimes chunk timestamps to match the
-generated narration. The strategy itself never needs to know about
-chunks, caching, or retiming — it only turns text into audio.
+(via cfg.TTS_BACKEND), and builds both the final audio file and the
+chunk timeline (new_start/new_end used by subtitles + slideshow) in a
+SINGLE pass — _build_audio_and_timeline below. This is deliberate:
+the previous version computed the timeline and the audio file in two
+separate passes that could silently drift apart (silent Q&A slides
+got a timestamp gap but no actual silence in the audio, so every
+subsequent line of speech played earlier than its subtitle). Doing
+both in one loop makes that class of bug structurally impossible —
+there is exactly one place that decides "how long is this chunk", and
+both the audio samples and the timestamps are derived from it.
 """
 
 import os
 import json
 import hashlib
+import wave
+
+import numpy as np
 
 from utils import get_logger, ensure_dirs
 from core.tts.factory import get_strategy
@@ -21,8 +31,8 @@ log = get_logger("tts")
 def generate_tts_audio(selected_chunks: list[dict], cfg) -> str:
     """
     Generate TTS audio for all selected chunks using whichever backend
-    cfg.TTS_BACKEND specifies, then retime the chunks in place to match
-    the generated narration's actual durations.
+    cfg.TTS_BACKEND specifies, then build the final audio file and the
+    chunk timeline together in one pass.
 
     Parameters
     ----------
@@ -32,13 +42,14 @@ def generate_tts_audio(selected_chunks: list[dict], cfg) -> str:
 
     Returns
     -------
-    Path to the final stitched WAV file.
+    Path to the final stitched WAV file (spoken audio + real silence,
+    exactly matching selected_chunks' new_start/new_end timestamps).
     """
     ensure_dirs(cfg.TEMP_DIR)
 
-    # Silent chunks (e.g. Q&A countdown / try-yourself slides) are
-    # skipped here — they get manual silence inserted during retiming,
-    # not real TTS audio.
+    # Silent chunks are never sent to the TTS strategy — the strategy
+    # only ever speaks real text. Real silence for is_silent chunks is
+    # inserted later, in the same pass that builds the timeline.
     texts = [
         chunk["text"].strip()
         for chunk in selected_chunks
@@ -59,49 +70,52 @@ def generate_tts_audio(selected_chunks: list[dict], cfg) -> str:
 
     strategy = get_strategy(cfg.TTS_BACKEND)
     strategy.check_available(cfg)
-    durations = strategy.synthesize(texts, output_path, cfg)
+    per_segment_audio = strategy.synthesize_segments(texts, cfg)
 
-    _retime_chunks_for_tts(selected_chunks, durations, cfg)
+    _build_audio_and_timeline(selected_chunks, per_segment_audio, output_path, cfg)
     _write_timings(selected_chunks, timings_path)
+
     log.info("TTS audio saved → %s", output_path)
     return output_path
 
 
-def _tts_cache_key(texts: list[str], cfg) -> str:
-    payload = "\n".join([
-        "tts-cache-v4",
-        cfg.TTS_BACKEND,
-        cfg.LANGUAGE,
-        getattr(cfg, "MACOS_TTS_VOICE", ""),
-        str(getattr(cfg, "MACOS_TTS_RATE", "")),
-        str(cfg.TTS_PAUSE_BETWEEN_SEGMENTS),
-        str(getattr(cfg, "TTS_PAUSE_BETWEEN_PHRASES", "")),
-        str(cfg.AUDIO_POST_PROCESSING),
-        cfg.AUDIO_FILTER,
-        "\n".join(texts),
-    ])
-    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
-
-
-def _retime_chunks_for_tts(chunks: list[dict], timings: list, cfg) -> None:
+def _build_audio_and_timeline(
+    chunks: list[dict],
+    per_segment_audio: list[dict],
+    output_path: str,
+    cfg,
+) -> None:
     """
-    Replace original timings with generated narration timings.
+    Single pass that builds BOTH the final audio file and the
+    new_start/new_end timestamps on each chunk. This is the only place
+    in the codebase that decides chunk duration — there is no second
+    implementation of this loop anywhere, so audio and subtitles/
+    slideshow cannot drift apart.
 
-    If a chunk has is_answer=True (Q&A mode), an extra pause is
-    inserted before it so the question fully lands before the answer
-    begins. This setting is per-mode (cfg.TTS_ANSWER_PAUSE_EXTRA) so
-    story_mode chunks (which never set is_answer) are unaffected.
+    per_segment_audio : list of dicts, one per spoken (non-silent)
+        chunk, in order, each shaped:
+            {"samples": np.int16 array, "sample_rate": int,
+             "phrases": [{"text": str, "start": float, "end": float}, ...]}
     """
-    current = 0.0
+    sample_rate = per_segment_audio[0]["sample_rate"] if per_segment_audio else 44100
     pause = cfg.TTS_PAUSE_BETWEEN_SEGMENTS
     answer_pause_extra = getattr(cfg, "TTS_ANSWER_PAUSE_EXTRA", 0.0)
-    timing_iter = iter(timings)
+
+    audio_parts: list[np.ndarray] = []
+    current = 0.0
+    seg_iter = iter(per_segment_audio)
+
+    def add_silence(duration: float) -> None:
+        n_samples = max(int(round(duration * sample_rate)), 0)
+        if n_samples > 0:
+            audio_parts.append(np.zeros(n_samples, dtype=np.int16))
 
     for chunk in chunks:
-        # ── Silent chunk (e.g. Q&A countdown): no TTS, fixed duration ──
+        # ── Silent chunk (e.g. Q&A countdown / try-yourself) ──
         if chunk.get("is_silent"):
             dur = max(chunk.get("silent_duration", 1.0), 0.1)
             display = chunk.get("display_text", chunk.get("text", ""))
+
             chunk["source_new_start"] = chunk.get("new_start", chunk.get("start", 0.0))
             chunk["new_start"] = current
             chunk["new_end"] = current + dur
@@ -116,22 +130,31 @@ def _retime_chunks_for_tts(chunks: list[dict], timings: list, cfg) -> None:
                 "new_end": current + dur,
                 "style": chunk.get("style", "default"),
             }]
-            current = chunk["new_end"] + pause
+
+            add_silence(dur)
+            current += dur
+            add_silence(pause)
+            current += pause
             continue
 
         if not chunk.get("text", "").strip():
             continue
 
-        if chunk.get("is_answer"):
+        if chunk.get("is_answer") and answer_pause_extra > 0:
+            add_silence(answer_pause_extra)
             current += answer_pause_extra
 
-        timing = next(timing_iter, None)
-        if isinstance(timing, dict):
-            dur = max(timing.get("duration", 0.0), 0.2)
-            phrases = timing.get("phrases", [])
-        else:
-            dur = max(timing or chunk.get("new_end", 0) - chunk.get("new_start", 0), 0.2)
+        segment = next(seg_iter, None)
+        if segment is None:
+            log.warning("No generated audio for chunk %r — inserting 2s silence.", chunk.get("text", "")[:40])
+            dur = 2.0
             phrases = [{"text": chunk["text"], "start": 0.0, "end": dur}]
+            add_silence(dur)
+        else:
+            samples = segment["samples"]
+            dur = len(samples) / float(segment["sample_rate"])
+            phrases = segment.get("phrases") or [{"text": chunk["text"], "start": 0.0, "end": dur}]
+            audio_parts.append(samples)
 
         old_start = chunk.get("new_start", chunk.get("start", 0.0))
         chunk["source_new_start"] = old_start
@@ -154,7 +177,50 @@ def _retime_chunks_for_tts(chunks: list[dict], timings: list, cfg) -> None:
             for phrase in phrases
             if phrase.get("text")
         ]
-        current = chunk["new_end"] + pause
+
+        current = chunk["new_end"]
+        add_silence(pause)
+        current += pause
+
+    if not audio_parts:
+        raise RuntimeError("No audio content generated — empty chunk list or all TTS calls failed")
+
+    combined = np.concatenate(audio_parts)
+    raw_path = output_path.replace(".wav", "_raw.wav")
+    with wave.open(raw_path, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(sample_rate)
+        out.writeframes(combined.tobytes())
+
+    # Polish once, on the complete stitched track (resample, EQ,
+    # compression, loudness normalization) — applying this once at the
+    # end gives more consistent loudness than polishing each spoken
+    # segment separately before silence is even in the picture.
+    from core.tts.audio_utils import resample_wav, polish_audio
+    resampled_path = output_path.replace(".wav", "_resampled.wav")
+    resample_wav(raw_path, resampled_path, target_rate=44100)
+    polish_audio(resampled_path, output_path, cfg)
+
+    for tmp in (raw_path, resampled_path):
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def _tts_cache_key(texts: list[str], cfg) -> str:
+    payload = "\n".join([
+        "tts-cache-v4",
+        cfg.TTS_BACKEND,
+        cfg.LANGUAGE,
+        getattr(cfg, "MACOS_TTS_VOICE", ""),
+        str(getattr(cfg, "MACOS_TTS_RATE", "")),
+        str(cfg.TTS_PAUSE_BETWEEN_SEGMENTS),
+        str(getattr(cfg, "TTS_PAUSE_BETWEEN_PHRASES", "")),
+        str(cfg.AUDIO_POST_PROCESSING),
+        cfg.AUDIO_FILTER,
+        "\n".join(texts),
+    ])
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
 
 
 def _write_timings(chunks: list[dict], timings_path: str) -> None:
