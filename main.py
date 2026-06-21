@@ -108,6 +108,15 @@ def main() -> None:
         from qa_mode.runner import run
         default_title = "interview_prep"
 
+    # Ensure output format is set to boxes if not specified
+    if args.output_mode is None:
+        args.output_mode = "full"  # Default to full if not specified
+
+    # Adjust timing settings for QA mode
+    if args.mode == "qa":
+        cfg.ANSWER_DELAY = 1  # Set answer delay to 1 second
+        cfg.QUESTION_GAP = 0   # Remove gap after question
+
     _apply_overrides(cfg, args)
     title = args.title or default_title
 

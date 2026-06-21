@@ -11,7 +11,7 @@ MODE_NAME = "qa"
 # ─────────────────────────────────────────────────────────────
 #  LANGUAGE
 # ─────────────────────────────────────────────────────────────
-LANGUAGE = "hi"
+LANGUAGE = "en"
 
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
@@ -31,7 +31,7 @@ TTS_BACKEND = "macos"
 
 XTTS_VOICE_SAMPLE = "assets/my_voice_sample.wav"
 
-MACOS_TTS_VOICE = "Lekha"
+MACOS_TTS_VOICE = "Samantha"
 MACOS_TTS_VOICES = {
     "hi": "Lekha",
     "hig": "Lekha",
@@ -87,14 +87,48 @@ QA_QUESTION_FONT_COLOR = (255, 200, 40)     # gold
 QA_ANSWER_FONT_SIZE = 58
 QA_ANSWER_FONT_COLOR = (255, 255, 255)      # white
 
-QA_TRY_YOURSELF_SECONDS = 2
+QA_TRY_YOURSELF_SECONDS = 0
 QA_TRY_YOURSELF_TEXT = "रुकिए और पहले खुद उत्तर देने की कोशिश करें"
 QA_TRY_YOURSELF_FONT_SIZE = 58
 QA_TRY_YOURSELF_FONT_COLOR = (255, 255, 255)
 
-QA_COUNTDOWN_SECONDS = 3
+QA_COUNTDOWN_SECONDS = 0
 QA_COUNTDOWN_FONT_SIZE = round(58 * 1.6)
 QA_COUNTDOWN_FONT_COLOR = (255, 200, 40)    # gold
+
+# ─────────────────────────────────────────────────────────────
+#  SPLIT-LAYOUT SLIDE SETTINGS
+#  (used by qa_mode/qa_slideshow.py — the new split-panel renderer)
+# ─────────────────────────────────────────────────────────────
+
+# Fraction of video height occupied by the QUESTION band (top section).
+# 0.35 = 35% question / 65% answer. Range: 0.2 – 0.6.
+QA_SLIDE_SPLIT_RATIO = 0.35
+
+# Background fill colours for each band. RGB tuple or "#RRGGBB" hex.
+QA_SLIDE_QUESTION_BG  = (205, 139,  97)   # warm peach / terracotta
+QA_SLIDE_ANSWER_BG    = (183, 204, 174)   # sage green
+
+# Text colours
+QA_SLIDE_QUESTION_COLOR = (30,  30,  30)   # near-black (readable on peach)
+QA_SLIDE_ANSWER_COLOR   = (30,  30,  30)   # near-black (readable on sage)
+
+# Font sizes (pixels) for question and answer text inside the slide image.
+# These are independent of the subtitle overlay sizes above.
+QA_SLIDE_QUESTION_FONT_SIZE = 72    # bold-looking at 1080p
+QA_SLIDE_ANSWER_FONT_SIZE   = 52
+
+# Margins expressed as fractions of the video dimension they refer to.
+# e.g. QA_SLIDE_MARGIN_TOP_Q = 0.04 → 4% of video height above question text.
+QA_SLIDE_MARGIN_TOP_Q  = 0.04   # top gap inside question band
+QA_SLIDE_MARGIN_BOT_Q  = 0.02   # bottom gap inside question band
+QA_SLIDE_MARGIN_TOP_A  = 0.04   # top gap inside answer band
+QA_SLIDE_MARGIN_BOT_A  = 0.10   # bottom gap inside answer band (~10% breathing room)
+QA_SLIDE_MARGIN_SIDE   = 0.05   # left/right margin (fraction of video width)
+
+# Whether to use the new split-layout renderer (True) or the legacy
+# subtitle-overlay approach (False).
+QA_USE_SPLIT_LAYOUT = True
 
 # ─────────────────────────────────────────────────────────────
 #  SUBTITLE STYLING (defaults — question/answer/countdown styles
@@ -125,10 +159,15 @@ BANNER_ENABLED = False
 # ─────────────────────────────────────────────────────────────
 HINDI_FONT_SEARCH_PATHS = [
     "assets/NotoSansDevanagari-Regular.ttf",
+    # Linux — FreeSerif has solid Devanagari coverage
+    "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+    # macOS
     "/Library/Fonts/NotoSansDevanagari-Regular.ttf",
     "/System/Library/Fonts/Supplemental/ITFDevanagari.ttc",
     "/System/Library/Fonts/Kohinoor.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
 ]
 
 FALLBACK_FONT_SEARCH_PATHS = [
@@ -153,6 +192,8 @@ AUDIO_CODEC = "aac"
 VIDEO_BITRATE = "4000k"
 AUDIO_BITRATE = "192k"
 CRF = 23
+TTS_PAUSE_BETWEEN_SEGMENTS = 1.0   # answer starts ~1s after question
+TTS_PAUSE_BETWEEN_PHRASES = 0.20
 
 
 def video_dimensions() -> tuple[int, int]:

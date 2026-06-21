@@ -1,0 +1,649 @@
+{
+  "id": "java",
+  "name": "Java",
+  "icon": "☕",
+  "description": "Master Java from fundamentals to advanced design patterns.",
+  "topics": [
+    {
+      "id": "java_intro",
+      "name": "Introduction",
+      "subTopics": [
+        {
+          "id": "intro_java",
+          "title": "What is Java?",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Java is a popular programming language, created in 1995. It is owned by Oracle, and more than 3 billion devices run Java."
+            },
+            {
+              "type": "text",
+              "content": "It is used for:\n• Mobile applications (specially Android apps)\n• Desktop applications\n• Web applications\n• Web servers and application servers\n• Games\n• Database connection\n• And much, much more!"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello World\");\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "java_features",
+          "title": "Key Features of Java",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Java has several distinctive features that make it a powerful language:\n\n• Simple & Easy to Learn: Java syntax is clean and straightforward\n• Object-Oriented: Everything is an object with attributes and methods\n• Platform Independent: \"Write Once, Run Anywhere\" (WORA)\n• Secure: Built-in security features and exception handling\n• Robust: Strong memory management and error handling\n• Multi-threaded: Supports concurrent programming\n• High Performance: Just-In-Time (JIT) compilation"
+            }
+          ]
+        },
+        {
+          "id": "java_setup",
+          "title": "Setting Up Java",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "To start programming in Java, you need to:\n\n1. Install JDK (Java Development Kit) from oracle.com\n2. Set up JAVA_HOME environment variable\n3. Verify installation: java -version\n4. Use an IDE like IntelliJ IDEA, Eclipse, or VS Code\n5. Write your first program and compile it with: javac filename.java\n6. Run it with: java filename"
+            },
+            {
+              "type": "code",
+              "language": "bash",
+              "content": "# Check Java version\njava -version\n\n# Compile Java file\njavac HelloWorld.java\n\n# Run compiled program\njava HelloWorld"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "java_basics",
+      "name": "Java Basics",
+      "subTopics": [
+        {
+          "id": "variables_types",
+          "title": "Variables & Data Types",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Variables are containers for storing data values. Java is a statically-typed language, meaning you must declare the type of data a variable will hold."
+            },
+            {
+              "type": "text",
+              "content": "Primitive Data Types:\n• byte: 8-bit signed integer (-128 to 127)\n• short: 16-bit signed integer\n• int: 32-bit signed integer\n• long: 64-bit signed integer\n• float: 32-bit floating point\n• double: 64-bit floating point\n• boolean: true or false\n• char: single character"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "public class DataTypes {\n    public static void main(String[] args) {\n        // Primitive types\n        int myInt = 42;\n        double myDouble = 3.14;\n        boolean myBoolean = true;\n        char myChar = 'A';\n        String myString = \"Hello, Java!\";\n        \n        System.out.println(\"Integer: \" + myInt);\n        System.out.println(\"Double: \" + myDouble);\n        System.out.println(\"Boolean: \" + myBoolean);\n        System.out.println(\"Character: \" + myChar);\n        System.out.println(\"String: \" + myString);\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "operators",
+          "title": "Operators",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Operators are used to perform operations on variables and values:\n\n• Arithmetic Operators: +, -, *, /, %, ++, --\n• Assignment Operators: =, +=, -=, *=, /=\n• Comparison Operators: ==, !=, >, <, >=, <=\n• Logical Operators: &&, ||, !\n• Bitwise Operators: &, |, ^, ~, <<, >>"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "public class Operators {\n    public static void main(String[] args) {\n        // Arithmetic\n        int a = 10, b = 5;\n        System.out.println(\"Addition: \" + (a + b));\n        System.out.println(\"Subtraction: \" + (a - b));\n        System.out.println(\"Multiplication: \" + (a * b));\n        System.out.println(\"Division: \" + (a / b));\n        System.out.println(\"Modulo: \" + (a % b));\n        \n        // Comparison\n        System.out.println(\"a > b: \" + (a > b));\n        System.out.println(\"a == b: \" + (a == b));\n        \n        // Logical\n        System.out.println(\"true && false: \" + (true && false));\n        System.out.println(\"true || false: \" + (true || false));\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "control_flow",
+          "title": "Control Flow Statements",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Control flow statements determine the flow of program execution:\n\n• if-else: Execute code based on conditions\n• switch: Execute one block among many\n• for loop: Repeat code a specific number of times\n• while loop: Repeat code while condition is true\n• do-while loop: Execute at least once, then repeat while true"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "public class ControlFlow {\n    public static void main(String[] args) {\n        // if-else\n        int age = 20;\n        if (age >= 18) {\n            System.out.println(\"Adult\");\n        } else {\n            System.out.println(\"Minor\");\n        }\n        \n        // switch\n        int day = 3;\n        switch(day) {\n            case 1: System.out.println(\"Monday\"); break;\n            case 2: System.out.println(\"Tuesday\"); break;\n            case 3: System.out.println(\"Wednesday\"); break;\n            default: System.out.println(\"Other day\");\n        }\n        \n        // for loop\n        for (int i = 0; i < 5; i++) {\n            System.out.println(\"i = \" + i);\n        }\n        \n        // while loop\n        int count = 0;\n        while (count < 3) {\n            System.out.println(\"Count: \" + count);\n            count++;\n        }\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "java_oop",
+      "name": "Object-Oriented Programming",
+      "subTopics": [
+        {
+          "id": "classes_objects",
+          "title": "Classes and Objects",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Java is an object-oriented programming language. Everything in Java is associated with classes and objects, along with its attributes and methods. A class is a blueprint for creating objects."
+            },
+            {
+              "type": "text",
+              "content": "Class Components:\n• Attributes (properties/fields): Variables that belong to the object\n• Methods: Functions that define the behavior of the object\n• Constructor: Special method used to initialize objects\n• Modifiers: Control access level (public, private, protected)"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Define a class\npublic class Car {\n    // Attributes\n    private String model;\n    private int year;\n    private String color;\n\n    // Constructor\n    public Car(String model, int year, String color) {\n        this.model = model;\n        this.year = year;\n        this.color = color;\n    }\n\n    // Methods\n    public void drive() {\n        System.out.println(\"The \" + model + \" is driving!\");\n    }\n    \n    public void honk() {\n        System.out.println(\"Honk! Honk!\");\n    }\n    \n    // Getter\n    public String getModel() {\n        return model;\n    }\n    \n    // Setter\n    public void setColor(String color) {\n        this.color = color;\n    }\n}\n\n// Create and use objects\nCar myCar = new Car(\"Tesla\", 2023, \"Red\");\nmyCar.drive();\nmyCar.honk();"
+            }
+          ]
+        },
+        {
+          "id": "inheritance",
+          "title": "Inheritance",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Inheritance allows a class to inherit attributes and methods from another class. It promotes code reuse and establishes a relationship between classes. The class that inherits is called a subclass (child), and the class being inherited from is called a superclass (parent)."
+            },
+            {
+              "type": "text",
+              "content": "Key Concepts:\n• Superclass: The parent class being inherited from\n• Subclass: The child class inheriting from the superclass\n• extends keyword: Used to inherit from a class\n• super keyword: Refers to the parent class\n• Method Overriding: Child class provides new implementation of parent method"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Parent class\npublic class Vehicle {\n    protected String brand = \"Ford\";\n    protected int year;\n    \n    public Vehicle(int year) {\n        this.year = year;\n    }\n    \n    public void honk() {\n        System.out.println(\"Tuut, tuut!\");\n    }\n    \n    public void display() {\n        System.out.println(\"Brand: \" + brand + \", Year: \" + year);\n    }\n}\n\n// Child class\npublic class Car extends Vehicle {\n    private String modelName = \"Mustang\";\n    \n    public Car(int year) {\n        super(year);\n    }\n    \n    @Override\n    public void display() {\n        super.display();\n        System.out.println(\"Model: \" + modelName);\n    }\n    \n    public static void main(String[] args) {\n        Car myCar = new Car(2023);\n        myCar.honk();\n        myCar.display();\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "polymorphism",
+          "title": "Polymorphism",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Polymorphism means \"many forms\". It allows you to perform a single action in many different ways. There are two types of polymorphism in Java:\n\n• Compile-time (Static) Polymorphism: Method Overloading\n• Runtime (Dynamic) Polymorphism: Method Overriding"
+            },
+            {
+              "type": "text",
+              "content": "Method Overloading: Same method name, different parameters (number, type, or order)\nMethod Overriding: Child class overrides parent class method with same signature"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Method Overloading (Compile-time Polymorphism)\npublic class Calculator {\n    public int add(int a, int b) {\n        return a + b;\n    }\n    \n    public double add(double a, double b) {\n        return a + b;\n    }\n    \n    public int add(int a, int b, int c) {\n        return a + b + c;\n    }\n}\n\n// Method Overriding (Runtime Polymorphism)\npublic class Animal {\n    public void sound() {\n        System.out.println(\"Animal makes a sound\");\n    }\n}\n\npublic class Dog extends Animal {\n    @Override\n    public void sound() {\n        System.out.println(\"Dog barks: Woof! Woof!\");\n    }\n}\n\npublic class Cat extends Animal {\n    @Override\n    public void sound() {\n        System.out.println(\"Cat meows: Meow! Meow!\");\n    }\n}\n\n// Usage\nAnimal myDog = new Dog();\nmyDog.sound();  // Output: Dog barks: Woof! Woof!\n\nAnimal myCat = new Cat();\nmyCat.sound();  // Output: Cat meows: Meow! Meow!"
+            }
+          ]
+        },
+        {
+          "id": "encapsulation",
+          "title": "Encapsulation",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Encapsulation is the bundling of data (variables) and methods (functions) into a single unit called a class. It hides the internal details and provides controlled access through public methods."
+            },
+            {
+              "type": "text",
+              "content": "Benefits:\n• Data Hiding: Keep internal state private\n• Controlled Access: Use getters and setters to control access\n• Flexibility: Modify internal implementation without affecting external code\n• Validation: Validate data before setting values"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "public class Student {\n    // Private attributes (hidden from outside)\n    private String name;\n    private int age;\n    private double gpa;\n    \n    // Constructor\n    public Student(String name, int age, double gpa) {\n        this.name = name;\n        this.age = age;\n        this.gpa = gpa;\n    }\n    \n    // Getters (provide read access)\n    public String getName() {\n        return name;\n    }\n    \n    public int getAge() {\n        return age;\n    }\n    \n    public double getGpa() {\n        return gpa;\n    }\n    \n    // Setters (provide write access with validation)\n    public void setName(String name) {\n        if (name != null && !name.isEmpty()) {\n            this.name = name;\n        }\n    }\n    \n    public void setAge(int age) {\n        if (age > 0 && age < 100) {\n            this.age = age;\n        }\n    }\n    \n    public void setGpa(double gpa) {\n        if (gpa >= 0 && gpa <= 4.0) {\n            this.gpa = gpa;\n        }\n    }\n}\n\n// Usage\nStudent student = new Student(\"John\", 20, 3.8);\nstudent.setGpa(3.9);\nSystem.out.println(\"GPA: \" + student.getGpa());"
+            }
+          ]
+        },
+        {
+          "id": "abstraction",
+          "title": "Abstraction",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Abstraction is the process of hiding complex implementation details and showing only the necessary features. It helps reduce complexity and increases efficiency."
+            },
+            {
+              "type": "text",
+              "content": "In Java, abstraction is achieved through:\n• Abstract Classes: Cannot be instantiated, can have abstract methods\n• Interfaces: Define contracts that classes must implement\n• Abstract Methods: Declared without implementation, subclasses must implement them"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Abstract class\npublic abstract class Shape {\n    abstract double getArea();\n    abstract double getPerimeter();\n    \n    public void display() {\n        System.out.println(\"This is a shape\");\n    }\n}\n\npublic class Circle extends Shape {\n    private double radius;\n    \n    public Circle(double radius) {\n        this.radius = radius;\n    }\n    \n    @Override\n    double getArea() {\n        return Math.PI * radius * radius;\n    }\n    \n    @Override\n    double getPerimeter() {\n        return 2 * Math.PI * radius;\n    }\n}\n\npublic class Rectangle extends Shape {\n    private double width, height;\n    \n    public Rectangle(double width, double height) {\n        this.width = width;\n        this.height = height;\n    }\n    \n    @Override\n    double getArea() {\n        return width * height;\n    }\n    \n    @Override\n    double getPerimeter() {\n        return 2 * (width + height);\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "java_advanced",
+      "name": "Advanced Concepts",
+      "subTopics": [
+        {
+          "id": "interfaces",
+          "title": "Interfaces",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "An interface is a reference type in Java. It is similar to a class but it only contains constants and abstract methods. Interfaces are used to achieve abstraction and multiple inheritance."
+            },
+            {
+              "type": "text",
+              "content": "Interface Features:\n• All methods are abstract by default\n• All variables are static and final\n• Cannot have constructors\n• A class can implement multiple interfaces\n• One interface can extend another interface"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Define interface\npublic interface Animal {\n    void eat();\n    void sleep();\n    String getSpecies();\n}\n\n// Implement interface\npublic class Dog implements Animal {\n    @Override\n    public void eat() {\n        System.out.println(\"Dog is eating\");\n    }\n    \n    @Override\n    public void sleep() {\n        System.out.println(\"Dog is sleeping\");\n    }\n    \n    @Override\n    public String getSpecies() {\n        return \"Canis familiaris\";\n    }\n}\n\n// Usage\nAnimal myDog = new Dog();\nmyDog.eat();\nmyDog.sleep();\nSystem.out.println(myDog.getSpecies());"
+            }
+          ]
+        },
+        {
+          "id": "exceptions",
+          "title": "Exception Handling",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Exception handling is a mechanism to handle runtime errors, enabling a program to continue execution even after an error occurs. Exceptions are events that disrupt the normal flow of program execution."
+            },
+            {
+              "type": "text",
+              "content": "Key Components:\n• try: Block containing code that might throw an exception\n• catch: Catches and handles the exception\n• finally: Block that always executes, regardless of exception\n• throw: Explicitly throw an exception\n• throws: Declare that method might throw an exception"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "public class ExceptionHandling {\n    public static void main(String[] args) {\n        try {\n            int[] numbers = {1, 2, 3};\n            System.out.println(numbers[5]);  // ArrayIndexOutOfBoundsException\n        } catch (ArrayIndexOutOfBoundsException e) {\n            System.out.println(\"Array index out of bounds: \" + e.getMessage());\n        } catch (Exception e) {\n            System.out.println(\"General exception: \" + e.getMessage());\n        } finally {\n            System.out.println(\"This always executes\");\n        }\n        \n        // Try with resources\n        try (Scanner scanner = new Scanner(System.in)) {\n            System.out.println(\"Enter input: \");\n            String input = scanner.nextLine();\n        } catch (Exception e) {\n            System.out.println(\"Error: \" + e.getMessage());\n        }\n    }\n    \n    // Method that throws exception\n    public static void divide(int a, int b) throws ArithmeticException {\n        if (b == 0) {\n            throw new ArithmeticException(\"Cannot divide by zero\");\n        }\n        System.out.println(\"Result: \" + (a / b));\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "collections",
+          "title": "Collections Framework",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Collections are containers that hold groups of objects. The Collections Framework provides interfaces and classes for storing, retrieving, and manipulating groups of data efficiently."
+            },
+            {
+              "type": "text",
+              "content": "Main Collection Types:\n• List: Ordered collection, allows duplicates (ArrayList, LinkedList)\n• Set: Unordered collection, no duplicates (HashSet, TreeSet)\n• Map: Key-value pairs (HashMap, TreeMap)\n• Queue: FIFO data structure (PriorityQueue, Deque)"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "import java.util.*;\n\npublic class CollectionsExample {\n    public static void main(String[] args) {\n        // List - allows duplicates, maintains order\n        List<String> fruits = new ArrayList<>();\n        fruits.add(\"Apple\");\n        fruits.add(\"Banana\");\n        fruits.add(\"Apple\");\n        System.out.println(\"List: \" + fruits);\n        \n        // Set - no duplicates\n        Set<Integer> numbers = new HashSet<>();\n        numbers.add(1);\n        numbers.add(2);\n        numbers.add(2);\n        System.out.println(\"Set: \" + numbers);\n        \n        // Map - key-value pairs\n        Map<String, Integer> scores = new HashMap<>();\n        scores.put(\"Alice\", 95);\n        scores.put(\"Bob\", 87);\n        System.out.println(\"Map: \" + scores);\n        \n        // Iteration\n        for (String fruit : fruits) {\n            System.out.println(fruit);\n        }\n        \n        // Iterator\n        Iterator<Integer> iterator = numbers.iterator();\n        while (iterator.hasNext()) {\n            System.out.println(iterator.next());\n        }\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "streams",
+          "title": "Streams API",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "The Streams API (introduced in Java 8) provides a functional programming approach to process sequences of elements. Streams allow for declarative, expressive, and efficient data processing."
+            },
+            {
+              "type": "text",
+              "content": "Stream Concepts:\n• Lazy Evaluation: Operations are performed only when needed\n• Functional Style: Uses lambda expressions and method references\n• Pipeline: Chain multiple operations (filter, map, reduce)\n• Non-interference: Streams don't modify source"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "import java.util.*;\nimport java.util.stream.*;\n\npublic class StreamsExample {\n    public static void main(String[] args) {\n        List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);\n        \n        // Filter: Keep only even numbers\n        List<Integer> evenNumbers = numbers.stream()\n            .filter(n -> n % 2 == 0)\n            .collect(Collectors.toList());\n        System.out.println(\"Even numbers: \" + evenNumbers);\n        \n        // Map: Square each number\n        List<Integer> squared = numbers.stream()\n            .map(n -> n * n)\n            .collect(Collectors.toList());\n        System.out.println(\"Squared: \" + squared);\n        \n        // Reduce: Calculate sum\n        int sum = numbers.stream()\n            .reduce(0, Integer::sum);\n        System.out.println(\"Sum: \" + sum);\n        \n        // Count: Count elements matching condition\n        long count = numbers.stream()\n            .filter(n -> n > 5)\n            .count();\n        System.out.println(\"Numbers > 5: \" + count);\n        \n        // Sort and print\n        numbers.stream()\n            .sorted(Comparator.reverseOrder())\n            .forEach(System.out::println);\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "generics",
+          "title": "Generics",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Generics enable types (classes and methods) to be parameters when defining classes, interfaces, and methods. They provide a way to write reusable code that works with different data types while maintaining type safety."
+            },
+            {
+              "type": "text",
+              "content": "Benefits of Generics:\n• Type Safety: Catch errors at compile-time instead of runtime\n• Code Reusability: Write once, use with any type\n• Elimination of Casts: No need for explicit type casting\n• Better Performance: Reduced overhead from type checking"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Generic class\npublic class Box<T> {\n    private T value;\n    \n    public void setValue(T value) {\n        this.value = value;\n    }\n    \n    public T getValue() {\n        return value;\n    }\n}\n\n// Generic method\npublic class Utilities {\n    public static <T> void printArray(T[] array) {\n        for (T element : array) {\n            System.out.println(element);\n        }\n    }\n    \n    // Bounded generics\n    public static <T extends Number> double sumNumbers(T[] numbers) {\n        double sum = 0;\n        for (T num : numbers) {\n            sum += num.doubleValue();\n        }\n        return sum;\n    }\n}\n\n// Usage\nBox<String> stringBox = new Box<>();\nstringBox.setValue(\"Hello\");\nSystem.out.println(stringBox.getValue());\n\nBox<Integer> intBox = new Box<>();\nintBox.setValue(42);\nSystem.out.println(intBox.getValue());\n\nInteger[] numbers = {1, 2, 3, 4, 5};\nUtilities.printArray(numbers);\nSystem.out.println(\"Sum: \" + Utilities.sumNumbers(numbers));"
+            }
+          ]
+        },
+        {
+          "id": "lambda",
+          "title": "Lambda Expressions",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Lambda expressions are anonymous functions that enable you to treat functionality as a method argument or return a function as a result. They simplify the syntax for implementing functional interfaces."
+            },
+            {
+              "type": "text",
+              "content": "Lambda Syntax: (parameters) -> { body }\n\nFeatures:\n• Concise syntax for anonymous functions\n• Works with functional interfaces\n• Enables functional programming style\n• Reduces code verbosity compared to anonymous classes"
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Functional interface\n@FunctionalInterface\npublic interface Calculator {\n    int calculate(int a, int b);\n}\n\npublic class LambdaExample {\n    public static void main(String[] args) {\n        // Lambda expressions\n        Calculator add = (a, b) -> a + b;\n        Calculator subtract = (a, b) -> a - b;\n        Calculator multiply = (a, b) -> a * b;\n        \n        System.out.println(\"Addition: \" + add.calculate(10, 5));\n        System.out.println(\"Subtraction: \" + subtract.calculate(10, 5));\n        System.out.println(\"Multiplication: \" + multiply.calculate(10, 5));\n        \n        // With collections\n        List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5);\n        \n        // Using lambda with forEach\n        numbers.forEach(n -> System.out.println(n));\n        \n        // Sorting with lambda\n        numbers.sort((a, b) -> b - a);  // Descending order\n        System.out.println(\"Sorted: \" + numbers);\n        \n        // Filtering with lambda\n        numbers.stream()\n            .filter(n -> n % 2 == 0)\n            .forEach(System.out::println);\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "java_patterns",
+      "name": "Design Patterns",
+      "subTopics": [
+        {
+          "id": "singleton",
+          "title": "Singleton Pattern",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "The Singleton pattern ensures that a class has only one instance and provides a global point of access to it. This is useful for coordinating actions across a system."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Singleton implementation\npublic class Singleton {\n    private static Singleton instance;\n    \n    // Private constructor prevents instantiation\n    private Singleton() {\n    }\n    \n    // Synchronized method to get instance\n    public static synchronized Singleton getInstance() {\n        if (instance == null) {\n            instance = new Singleton();\n        }\n        return instance;\n    }\n}\n\n// Thread-safe singleton (Eager Initialization)\npublic class EagerSingleton {\n    private static final EagerSingleton instance = new EagerSingleton();\n    \n    private EagerSingleton() {\n    }\n    \n    public static EagerSingleton getInstance() {\n        return instance;\n    }\n}"
+            }
+          ]
+        },
+        {
+          "id": "factory",
+          "title": "Factory Pattern",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "The Factory pattern provides an interface for creating objects without specifying the exact classes to create. It promotes loose coupling and easier maintenance."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Product interface\npublic interface Transport {\n    void deliver();\n}\n\n// Concrete products\npublic class Truck implements Transport {\n    @Override\n    public void deliver() {\n        System.out.println(\"Delivering by truck\");\n    }\n}\n\npublic class Ship implements Transport {\n    @Override\n    public void deliver() {\n        System.out.println(\"Delivering by ship\");\n    }\n}\n\n// Factory\npublic class TransportFactory {\n    public static Transport createTransport(String type) {\n        if (type.equals(\"truck\")) {\n            return new Truck();\n        } else if (type.equals(\"ship\")) {\n            return new Ship();\n        }\n        return null;\n    }\n}\n\n// Usage\nTransport truck = TransportFactory.createTransport(\"truck\");\ntruck.deliver();"
+            }
+          ]
+        },
+        {
+          "id": "observer",
+          "title": "Observer Pattern",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "The Observer pattern defines a one-to-many relationship where when one object changes state, all its dependents are notified automatically. It's useful for implementing distributed event-handling systems."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "import java.util.*;\n\n// Subject (Observable)\npublic class WeatherStation {\n    private List<Observer> observers = new ArrayList<>();\n    private float temperature;\n    \n    public void subscribe(Observer observer) {\n        observers.add(observer);\n    }\n    \n    public void unsubscribe(Observer observer) {\n        observers.remove(observer);\n    }\n    \n    public void setTemperature(float temp) {\n        this.temperature = temp;\n        notifyObservers();\n    }\n    \n    private void notifyObservers() {\n        for (Observer observer : observers) {\n            observer.update(temperature);\n        }\n    }\n}\n\n// Observer interface\npublic interface Observer {\n    void update(float temperature);\n}\n\n// Concrete observers\npublic class TemperatureDisplay implements Observer {\n    @Override\n    public void update(float temperature) {\n        System.out.println(\"Temperature Display: \" + temperature + \"°C\");\n    }\n}\n\n// Usage\nWeatherStation station = new WeatherStation();\nObserver display = new TemperatureDisplay();\nstation.subscribe(display);\nstation.setTemperature(25.5f);"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "java_multithreading",
+      "name": "Multithreading",
+      "subTopics": [
+        {
+          "id": "threads_basics",
+          "title": "Threads & Concurrency",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "A thread is a lightweight process that can run independently within a program. Multithreading enables concurrent execution of multiple tasks, improving performance and responsiveness."
+            },
+            {
+              "type": "text",
+              "content": "Creating Threads:\n1. Extend Thread class and override run() method\n2. Implement Runnable interface and pass to Thread constructor\n\nThe Runnable approach is preferred as Java doesn't support multiple inheritance."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Method 1: Extend Thread class\npublic class MyThread extends Thread {\n    public void run() {\n        for (int i = 0; i < 5; i++) {\n            System.out.println(Thread.currentThread().getName() + \": \" + i);\n            try {\n                Thread.sleep(1000);  // Sleep for 1 second\n            } catch (InterruptedException e) {\n                e.printStackTrace();\n            }\n        }\n    }\n}\n\n// Usage\nMyThread thread1 = new MyThread();\nMyThread thread2 = new MyThread();\nthread1.start();\nthread2.start();\n\n// Method 2: Implement Runnable interface\npublic class MyRunnable implements Runnable {\n    public void run() {\n        System.out.println(Thread.currentThread().getName() + \" is running\");\n    }\n}\n\n// Usage\nThread thread = new Thread(new MyRunnable());\nthread.start();"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "java8",
+      "name": "Java 8 — Key Additions & Deep Dive",
+      "icon": "🧩",
+      "description": "In-depth coverage of Java 8 features: Lambdas, Streams, Optional, new Date/Time API, CompletableFuture, collectors, and practical examples.",
+      "subTopics": [
+        {
+          "id": "j8_overview",
+          "title": "Overview of Java 8",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Java 8 introduced major language and library enhancements focused on functional-style programming and improved APIs. The most notable features are lambda expressions, the Streams API, the Optional type, the java.time date/time API, default and static methods in interfaces, method references, and CompletableFuture for async programming."
+            },
+            {
+              "type": "text",
+              "content": "This section provides conceptual context and the motivation behind each addition: conciseness, easier parallelism, safer null handling, and clearer date/time handling."
+            }
+          ]
+        },
+        {
+          "id": "j8_lambda_functional_interfaces",
+          "title": "Lambda Expressions & Functional Interfaces",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Lambda expressions let you treat functionality as data: pass behavior to methods. A lambda is an anonymous function with a concise syntax: (parameters) -> expression or (parameters) -> { statements }."
+            },
+            {
+              "type": "text",
+              "content": "Functional interfaces are single-abstract-method interfaces (SAM). Java 8 adds @FunctionalInterface annotation to express intent (optional but useful). The java.util.function package provides common functional interfaces: Function, Consumer, Supplier, Predicate, BiFunction, etc."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Example: Runnable before and after\n// Pre-Java8\nRunnable r1 = new Runnable() {\n    @Override\n    public void run() {\n        System.out.println(\"Hello from anonymous class\");\n    }\n};\n\n// Java 8 lambda\nRunnable r2 = () -> System.out.println(\"Hello from lambda\");\n\n// Using Function and Predicate\nFunction<String, Integer> length = s -> s.length();\nPredicate<String> isEmpty = String::isEmpty;  // method reference\n\nSystem.out.println(length.apply(\"Java8\"));\nSystem.out.println(isEmpty.test(\"\"));"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: Lambdas reduce boilerplate, make callbacks concise, and pair naturally with Streams. Choose the right functional interface from java.util.function or create a custom SAM when needed."
+            }
+          ]
+        },
+        {
+          "id": "j8_method_references",
+          "title": "Method References",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Method references are compact lambdas that refer to existing methods. They come in four forms: reference to static method (ContainingClass::staticMethod), reference to instance method of particular object (instance::method), reference to instance method of an arbitrary object of a particular type (ClassName::instanceMethod), and constructor references (ClassName::new)."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "List<String> names = Arrays.asList(\"alice\",\"bob\",\"charlie\");\n// Lambda\nnames.forEach(s -> System.out.println(s.toUpperCase()));\n// Method reference\nnames.forEach(System.out::println);\n\n// Constructor reference\nSupplier<List<String>> listFactory = ArrayList::new;\nList<String> newList = listFactory.get();"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: method references improve readability when a lambda only calls an existing method."
+            }
+          ]
+        },
+        {
+          "id": "j8_default_static_methods",
+          "title": "Default & Static Methods in Interfaces",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Interfaces can now have default (instance) methods with implementation and static methods. This enables API evolution without breaking existing implementations and allows providing helper utilities on the interface type."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "public interface MyInterface {\n    void required();\n\n    default void optional() {\n        System.out.println(\"Default impl\");\n    }\n\n    static void helper() {\n        System.out.println(\"Static helper\");\n    }\n}\n\nclass Impl implements MyInterface {\n    @Override\n    public void required() {\n        System.out.println(\"Implemented\");\n    }\n}\n\nMyInterface impl = new Impl();\nimpl.optional();   // uses default\nMyInterface.helper();"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: Use default methods sparingly to evolve interfaces. Resolve conflicts explicitly when multiple interfaces provide the same default method."
+            }
+          ]
+        },
+        {
+          "id": "j8_streams_deep",
+          "title": "Streams API — Deep Dive",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Streams provide a high-level, declarative API for processing collections of data. A stream pipeline has a source, zero or more intermediate operations (lazy), and a terminal operation (eager). Streams can be sequential or parallel."
+            },
+            {
+              "type": "text",
+              "content": "Common intermediate operations: map, filter, flatMap, distinct, sorted, peek, limit, skip. Terminal operations: forEach, collect, reduce, count, findFirst, anyMatch, allMatch, noneMatch, toArray."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "List<String> words = Arrays.asList(\"Java\",\"Streams\",\"Lambda\",\"Optional\",\"DateTime\");\n\n// Pipeline example: filter, map, collect\nList<String> result = words.stream()\n    .filter(w -> w.length() > 4)\n    .map(String::toUpperCase)\n    .sorted()\n    .collect(Collectors.toList());\n\n// Reduction example: join\nString joined = words.stream()\n    .collect(Collectors.joining(\", \"));\n\n// Numeric stream example\nint sum = IntStream.rangeClosed(1, 10)\n    .filter(n -> n % 2 == 0)\n    .sum();"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: map transforms elements, flatMap flattens nested structures (e.g., List<List<T>> → Stream<T>), and Collectors provides useful collectors: toList, toSet, toMap, groupingBy, partitioningBy, summarizingInt, joining, and more."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// groupingBy example: group words by length\nMap<Integer, List<String>> byLen = words.stream()\n    .collect(Collectors.groupingBy(String::length));\n\n// partitioningBy example: vowels-starting vs others\nMap<Boolean, List<String>> partition = words.stream()\n    .collect(Collectors.partitioningBy(w -> \"AEIOU\".contains(w.substring(0,1).toUpperCase())));"
+            }
+          ]
+        },
+        {
+          "id": "j8_collectors_custom",
+          "title": "Collectors & Custom Collector Patterns",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Collectors encapsulate mutable reduction strategies. You can combine collectors with downstream collectors for complex aggregations and use Collector.of to create custom collectors when needed."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Example: summarizing statistics\nIntSummaryStatistics stats = IntStream.of(1,2,3,4,5,6)\n    .summaryStatistics();\n\n// Collector with downstream: grouping and counting\nMap<String, Long> counts = words.stream()\n    .collect(Collectors.groupingBy(w -> w.substring(0,1).toUpperCase(), Collectors.counting()));"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: prefer built-in collectors for maintainability; use custom collectors for performance-critical or specialized cases."
+            }
+          ]
+        },
+        {
+          "id": "j8_parallel_streams",
+          "title": "Parallel Streams & Concurrency Considerations",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Parallel streams can speed up CPU-bound pipelines by using the common ForkJoinPool. Use parallel streams when the dataset is large, operations are stateless and associative, and thread-safety is ensured for mutable collectors."
+            },
+            {
+              "type": "text",
+              "content": "Caveats: avoid shared mutable state, be mindful of short pipelines or I/O bound steps (overhead may outweigh benefits), and watch out for thread pool interference with other async tasks."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Parallel sum example\nlong count = LongStream.rangeClosed(1, 1_000_000)\n    .parallel()\n    .filter(n -> n % 2 == 0)\n    .count();"
+            }
+          ]
+        },
+        {
+          "id": "j8_optional",
+          "title": "Optional — Null-safe Handling",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Optional<T> models presence/absence of value and helps avoid null checks and NullPointerException. Use Optional as a return type for potentially missing values, but avoid using Optional for fields or method parameters in performance-sensitive contexts."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "Optional<String> maybe = Optional.ofNullable(getUserNickname());\n\n// safe extraction with default\nString nick = maybe.orElse(\"guest\");\n\n// mapping inside Optional\nint len = maybe.map(String::length).orElse(0);\n\n// chaining and filtering\nmaybe.filter(s -> s.length() > 3).ifPresent(System.out::println);"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: prefer map/flatMap/filter to keep code functional and concise; use orElseGet for lazy defaults and orElseThrow when absence should be exceptional."
+            }
+          ]
+        },
+        {
+          "id": "j8_datetime",
+          "title": "java.time — New Date/Time API",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "The java.time API replaces legacy Date/Calendar with immutable, fluent types: LocalDate, LocalTime, LocalDateTime, ZonedDateTime, Instant, Duration, Period, and DateTimeFormatter. It provides better clarity, timezone handling, and thread-safety."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "LocalDate today = LocalDate.now();\nLocalDate birthday = LocalDate.of(1990, Month.JANUARY, 1);\nLocalDateTime now = LocalDateTime.now();\nZonedDateTime zdt = ZonedDateTime.now(ZoneId.of(\"Asia/Kolkata\"));\n\n// Formatting and parsing\nDateTimeFormatter fmt = DateTimeFormatter.ofPattern(\"dd MMM uuuu HH:mm\");\nString formatted = now.format(fmt);\nLocalDateTime parsed = LocalDateTime.parse(\"01 Jan 2020 10:30\", fmt);\n\n// Duration and Period\nDuration dur = Duration.between(LocalTime.of(9,0), LocalTime.of(17,0));\nPeriod p = Period.between(birthday, today);"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: use Instant for timestamps, ZonedDateTime for timezone-aware operations, and prefer java.time over legacy APIs. DateTimeFormatter is thread-safe and immutable."
+            }
+          ]
+        },
+        {
+          "id": "j8_completablefuture",
+          "title": "CompletableFuture — Async Programming",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "CompletableFuture supports building asynchronous, non-blocking pipelines with functional callbacks. It integrates well with Streams and provides methods like supplyAsync, thenApply, thenCompose, thenAccept, exceptionally, and handle."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "CompletableFuture.supplyAsync(() -> fetchFromRemote())\n    .thenApply(result -> transform(result))\n    .thenAccept(finalResult -> System.out.println(finalResult))\n    .exceptionally(ex -> { System.err.println(\"Error: \" + ex); return null; });\n\n// Combining futures\nCompletableFuture<String> a = CompletableFuture.supplyAsync(() -> \"A\");\nCompletableFuture<String> b = CompletableFuture.supplyAsync(() -> \"B\");\nCompletableFuture<String> combined = a.thenCombine(b, (x,y) -> x + y);"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: prefer thenCompose to flatten dependent async calls and thenCombine to combine independent results. Be mindful of thread pools and handle exceptions explicitly to avoid silent failures."
+            }
+          ]
+        },
+        {
+          "id": "j8_practical_examples",
+          "title": "Practical Examples & Patterns",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "This section shows practical recipes combining features: streaming & grouping data, using Optional to avoid null checks, mapping date/time, and running tasks in parallel with CompletableFuture."
+            },
+            {
+              "type": "code",
+              "language": "java",
+              "content": "// Example: find top 3 longest book titles by author using Streams\nList<Book> books = fetchBooks();\nMap<String, List<String>> topTitlesByAuthor = books.stream()\n    .collect(Collectors.groupingBy(Book::getAuthor,\n        Collectors.mapping(Book::getTitle,\n            Collectors.collectingAndThen(Collectors.toList(), list -> list.stream()\n                .sorted(Comparator.comparingInt(String::length).reversed())\n                .limit(3)\n                .collect(Collectors.toList())))));\n\n// Example: async pipeline fetching user, then orders, then compute total\nCompletableFuture<User> userF = CompletableFuture.supplyAsync(() -> userService.find(id));\nCompletableFuture<Double> totalF = userF.thenCompose(u -> CompletableFuture.supplyAsync(() -> orderService.totalForUser(u.getId())));\n\ntotalF.thenAccept(total -> System.out.println(\"Total: \" + total));"
+            },
+            {
+              "type": "text",
+              "content": "Explanation: combine groupingBy with downstream collectors for multi-step aggregation. Use CompletableFuture for non-blocking orchestration of dependent services. Favor immutability and stateless functions in stream pipelines."
+            }
+          ]
+        },
+        {
+          "id": "j8_benefits_tradeoffs",
+          "title": "Benefits, Best Practices & Trade-offs",
+          "contentBlocks": [
+            {
+              "type": "text",
+              "content": "Benefits: concise code, clearer data pipelines, safer null handling, modern date/time handling, and better async APIs.\nTrade-offs: lambdas can be harder to debug (stack traces), overuse of parallel streams can cause contention, Optional misuse can cause overhead, and default methods can introduce diamond problems if not designed carefully."
+            },
+            {
+              "type": "text",
+              "content": "Best practices: favor pure functions in streams, avoid side-effects, use built-in collectors, handle exceptions explicitly in async pipelines, and choose the right abstraction (Optional vs nullable, Stream vs loop)."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
