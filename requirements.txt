@@ -18,6 +18,9 @@ scipy>=1.11.0
 # Optional: only needed if a mode's config sets TTS_BACKEND = "xtts".
 # Downloads a ~2 GB model on first run. Uncomment to install:
 # TTS>=0.22.0
+# soundfile is the torchaudio.load fallback when torchaudio 2.6+ uses torchcodec.
+# Install alongside TTS:  pip install soundfile
+soundfile>=0.12.0
 
 # Note: "macos" backend (the default in both story_mode/config.py and
 # qa_mode/config.py) needs no extra Python packages — it uses the
