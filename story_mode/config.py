@@ -54,11 +54,17 @@ TTS_ANSWER_PAUSE_EXTRA = 0.0   # story mode has no Q&A pacing concept
 
 AUDIO_POST_PROCESSING = True
 AUDIO_FILTER = (
-    "highpass=f=100,"
-    "lowpass=f=10000,"
-    "equalizer=f=7000:width_type=o:width=2:g=-3,"
-    "acompressor=threshold=-16dB:ratio=2.5:attack=10:release=150:makeup=2,"
-    "loudnorm=I=-16:TP=-1.5:LRA=9"
+    # Remove low rumble while keeping voice warmth (80Hz not 100Hz)
+    "highpass=f=80,"
+    # Allow full voice presence up to 14kHz
+    "lowpass=f=14000,"
+    # Slight presence boost at 3kHz for clarity, gentle cut at 7kHz for harshness
+    "equalizer=f=3000:width_type=o:width=2:g=1.5,"
+    "equalizer=f=7000:width_type=o:width=2:g=-2,"
+    # Gentle compressor — lower ratio and makeup to avoid pumping
+    "acompressor=threshold=-20dB:ratio=1.8:attack=20:release=300:makeup=1,"
+    # Louder target (-14 LUFS) with more dynamic range (LRA=12)
+    "loudnorm=I=-14:TP=-1:LRA=12"
 )
 
 MMS_TTS_MODEL_IDS = {

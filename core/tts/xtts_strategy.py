@@ -2,11 +2,20 @@
 core/tts/xtts_strategy.py — Coqui XTTS-v2 voice cloning strategy.
 
 Compatibility patches for PyTorch/torchaudio 2.6:
-  1. torch.load defaults to weights_only=True  → patch to False
-  2. torchaudio.load defaults to torchcodec    → patch to use soundfile backend
+  1. torch.load       — weights_only=True breaks XttsConfig
+  2. torchaudio.load  — torchcodec not installed → soundfile fallback
+
+Quality improvements:
+  - Long text is pre-split into sentence chunks before XTTS sees it.
+    XTTS has a ~400-token context limit; feeding it long text causes
+    rushed/distorted audio at chunk boundaries (especially the last sentence).
+  - Each sentence chunk is synthesised individually and concatenated,
+    giving clean, natural-sounding output throughout.
 """
 
 import os
+import re
+import sys
 import traceback
 from contextlib import contextmanager
 
@@ -18,87 +27,150 @@ from core.lang.transliterate import clean_text
 
 log = get_logger("tts.xtts")
 
+# Maximum characters per XTTS chunk. XTTS-v2 handles ~250 chars cleanly;
+# beyond ~400 it starts rushing/distorting the end of the segment.
+XTTS_MAX_CHARS = 220
+
+
+def _split_into_chunks(text: str, max_chars: int = XTTS_MAX_CHARS) -> list[str]:
+    """
+    Split text into chunks of at most max_chars, breaking at sentence
+    boundaries (।  .  ?  !) first, then at clause boundaries (, ; —),
+    and finally by word if nothing else fits.
+    Returns a list of non-empty stripped strings.
+    """
+    # If short enough, return as-is
+    text = text.strip()
+    if len(text) <= max_chars:
+        return [text] if text else []
+
+    # Split on sentence-ending punctuation (keep delimiter with preceding text)
+    sentence_endings = re.compile(r'(?<=[।.?!])\s+')
+    sentences = sentence_endings.split(text)
+
+    chunks = []
+    current = ""
+
+    for sent in sentences:
+        sent = sent.strip()
+        if not sent:
+            continue
+
+        # If adding this sentence stays within limit, accumulate
+        candidate = (current + " " + sent).strip() if current else sent
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            # Flush current chunk
+            if current:
+                chunks.append(current)
+            # Sentence itself too long — split on clause boundaries
+            if len(sent) > max_chars:
+                sub_chunks = _split_on_clauses(sent, max_chars)
+                if sub_chunks:
+                    chunks.extend(sub_chunks[:-1])
+                    current = sub_chunks[-1]
+                else:
+                    current = sent
+            else:
+                current = sent
+
+    if current:
+        chunks.append(current)
+
+    return [c for c in chunks if c.strip()]
+
+
+def _split_on_clauses(text: str, max_chars: int) -> list[str]:
+    """Split on clause punctuation (, ; — :) when sentence is too long."""
+    clause_re = re.compile(r'(?<=[,;:—])\s+')
+    parts = clause_re.split(text)
+    chunks, current = [], ""
+    for part in parts:
+        part = part.strip()
+        candidate = (current + " " + part).strip() if current else part
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            # Still too long — split by words
+            if len(part) > max_chars:
+                words = part.split()
+                current = ""
+                for w in words:
+                    trial = (current + " " + w).strip() if current else w
+                    if len(trial) <= max_chars:
+                        current = trial
+                    else:
+                        if current:
+                            chunks.append(current)
+                        current = w
+            else:
+                current = part
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _load_audio_via_soundfile(filepath, *args, **kwargs):
+    """Drop-in replacement for torchaudio.load() using soundfile."""
+    import torch
+    import soundfile as sf
+    data, sr = sf.read(str(filepath), dtype="float32", always_2d=True)
+    tensor = torch.from_numpy(data.T.copy())
+    return tensor, sr
+
 
 @contextmanager
 def _compat_patches():
-    """
-    Apply two monkey-patches needed for Coqui XTTS on PyTorch/torchaudio 2.6:
-
-    1. torch.load: default changed to weights_only=True — breaks XttsConfig
-       checkpoint loading. Patch to always use weights_only=False.
-
-    2. torchaudio.load: now routes through torchcodec which isn't installed
-       with Coqui. Patch to use the soundfile backend directly instead.
-
-    Both patches are scoped to the with-block and immediately reverted.
-    """
+    """Patch torch.load and torchaudio.load for PyTorch/torchaudio 2.6."""
     import torch
     import torchaudio
 
-    # ── Patch 1: torch.load weights_only ─────────────────────────────────
+    # Patch 1: torch.load weights_only
     _orig_torch_load = torch.load
-
     def _patched_torch_load(f, *args, **kwargs):
         kwargs.setdefault("weights_only", False)
         return _orig_torch_load(f, *args, **kwargs)
-
     torch.load = _patched_torch_load
+    sys.modules["torch"].load = _patched_torch_load
 
-    # ── Patch 2: torchaudio.load → soundfile backend ──────────────────────
-    # torchaudio 2.6 tries torchcodec first; fall back to soundfile/sox.
+    # Patch 2: torchaudio.load → soundfile
+    _needs_patch = _torchcodec_is_broken()
     _orig_torchaudio_load = torchaudio.load
-
-    def _patched_torchaudio_load(filepath, *args, **kwargs):
-        # Try the old backend kwarg first (torchaudio < 2.6 style)
-        for backend in ("soundfile", "sox_io", "sox"):
-            try:
-                return torchaudio.load(filepath, *args, backend=backend, **kwargs)
-            except Exception:
-                pass
-        # Last resort: read with soundfile directly and return a tensor
-        try:
-            import soundfile as sf
-            data, sr = sf.read(str(filepath), dtype="float32", always_2d=True)
-            tensor = torch.from_numpy(data.T)   # (channels, samples)
-            return tensor, sr
-        except Exception:
-            pass
-        # Absolute fallback: scipy
-        try:
-            from scipy.io import wavfile
-            sr, data = wavfile.read(str(filepath))
-            if data.dtype != np.float32:
-                data = data.astype(np.float32) / np.iinfo(data.dtype).max
-            if data.ndim == 1:
-                data = data[np.newaxis, :]
-            else:
-                data = data.T
-            return torch.from_numpy(data), sr
-        except Exception as e:
-            raise RuntimeError(
-                f"Could not load audio file {filepath!r}. "
-                "Install soundfile:  pip install soundfile\n"
-                f"Original error: {e}"
-            )
-
-    # Only replace if the installed torchaudio actually tries torchcodec
-    _needs_torchaudio_patch = False
-    try:
-        import torchaudio._torchcodec  # noqa: F401
-        _needs_torchaudio_patch = True
-    except ImportError:
-        pass
-
-    if _needs_torchaudio_patch:
-        torchaudio.load = _patched_torchaudio_load
-        log.info("torchaudio.load patched (torchcodec bypass → soundfile)")
+    if _needs_patch:
+        log.info("Patching torchaudio.load → soundfile (torchcodec unavailable)")
+        torchaudio.load = _load_audio_via_soundfile
+        sys.modules["torchaudio"].load = _load_audio_via_soundfile
+        _xtts_mod = sys.modules.get("TTS.tts.models.xtts")
+        if _xtts_mod and hasattr(_xtts_mod, "torchaudio"):
+            _xtts_mod.torchaudio.load = _load_audio_via_soundfile
 
     try:
         yield
     finally:
         torch.load = _orig_torch_load
-        if _needs_torchaudio_patch:
+        sys.modules["torch"].load = _orig_torch_load
+        if _needs_patch:
             torchaudio.load = _orig_torchaudio_load
+            sys.modules["torchaudio"].load = _orig_torchaudio_load
+            _xtts_mod = sys.modules.get("TTS.tts.models.xtts")
+            if _xtts_mod and hasattr(_xtts_mod, "torchaudio"):
+                _xtts_mod.torchaudio.load = _orig_torchaudio_load
+
+
+def _torchcodec_is_broken() -> bool:
+    try:
+        from torchcodec.decoders import AudioDecoder  # noqa: F401
+        return False
+    except ImportError:
+        pass
+    try:
+        import torchaudio._torchcodec  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 class XTTSStrategy(TTSStrategy):
@@ -108,16 +180,12 @@ class XTTSStrategy(TTSStrategy):
         try:
             import TTS  # noqa: F401
         except ImportError:
-            raise RuntimeError(
-                "TTS_BACKEND is 'xtts' but the Coqui TTS package isn't installed.\n"
-                "Install with:  pip install TTS"
-            )
+            raise RuntimeError("TTS_BACKEND='xtts' but Coqui TTS not installed.\npip install TTS")
         sample = getattr(cfg, "XTTS_VOICE_SAMPLE", None)
         if not sample or not os.path.exists(sample):
             raise RuntimeError(
-                f"TTS_BACKEND is 'xtts' but no voice sample was found at: {sample!r}.\n"
-                "Set cfg.XTTS_VOICE_SAMPLE to a WAV of your own voice "
-                "(10-30 seconds, quiet room)."
+                f"No voice sample at: {sample!r}\n"
+                "Set cfg.XTTS_VOICE_SAMPLE to a 10-30s clean WAV."
             )
 
     def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
@@ -126,77 +194,84 @@ class XTTSStrategy(TTSStrategy):
         try:
             from TTS.api import TTS
         except ImportError:
-            raise RuntimeError("Coqui TTS is not installed. Run:  pip install TTS")
+            raise RuntimeError("Coqui TTS not installed. pip install TTS")
 
-        voice_sample = cfg.XTTS_VOICE_SAMPLE
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
-        log.info("Loading Coqui XTTS-v2 model (first run downloads ~2 GB) …")
-        log.info("TTS device: %s", device)
+        voice_sample   = cfg.XTTS_VOICE_SAMPLE
+        device         = "mps" if torch.backends.mps.is_available() else "cpu"
+        xtts_language  = "hi" if cfg.LANGUAGE in ("hi", "hig") else "en"
+        sample_rate    = 24000
+        results        = []
+
+        log.info("Loading Coqui XTTS-v2 model …  device=%s", device)
 
         with _compat_patches():
             tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 
-            sample_rate   = 24000
-            xtts_language = "hi" if cfg.LANGUAGE in ("hi", "hig") else "en"
-            results       = []
-
-            for i, text in enumerate(texts, 1):
-                log.info("  XTTS %d/%d: %s …", i, len(texts), text[:60])
+            for seg_idx, text in enumerate(texts, 1):
+                log.info("  Segment %d/%d: %s …", seg_idx, len(texts), text[:60])
                 cleaned = clean_text(text, cfg)
                 if not cleaned:
-                    log.warning("  Segment %d cleaned to empty — inserting silence", i)
                     results.append(_silent_segment(text, sample_rate))
                     continue
 
-                try:
-                    wav_list = tts.tts(
-                        text=cleaned,
-                        speaker_wav=voice_sample,
-                        language=xtts_language,
-                    )
-                    waveform = np.array(wav_list, dtype=np.float32)
-                    if waveform.size == 0 or np.max(np.abs(waveform)) == 0:
-                        raise ValueError(f"XTTS returned silent/empty audio for segment {i}")
+                # ── Pre-split into XTTS-safe chunks ──────────────────────
+                chunks = _split_into_chunks(cleaned, XTTS_MAX_CHARS)
+                log.info("    → %d chunk(s) (max %d chars each)", len(chunks), XTTS_MAX_CHARS)
 
-                    samples = _float_to_int16(waveform)
-                    dur = len(samples) / sample_rate
-                    log.info("  Segment %d: %.2fs (max_amp=%.4f)", i, dur,
-                             float(np.max(np.abs(waveform))))
-                    results.append({
-                        "samples":     samples,
-                        "sample_rate": sample_rate,
-                        "phrases":     [{"text": cleaned, "start": 0.0, "end": dur}],
-                    })
+                seg_waves = []
+                try:
+                    for c_idx, chunk in enumerate(chunks, 1):
+                        log.info("    Chunk %d/%d (%d chars): %s",
+                                 c_idx, len(chunks), len(chunk), chunk[:50])
+                        wav = tts.tts(
+                            text=chunk,
+                            speaker_wav=voice_sample,
+                            language=xtts_language,
+                        )
+                        arr = np.array(wav, dtype=np.float32)
+                        if arr.size == 0:
+                            log.warning("    Chunk %d returned empty audio", c_idx)
+                            continue
+                        seg_waves.append(arr)
+
+                        # Small natural pause between chunks (0.15s silence)
+                        if c_idx < len(chunks):
+                            pause = np.zeros(int(sample_rate * 0.15), dtype=np.float32)
+                            seg_waves.append(pause)
 
                 except Exception as e:
-                    log.error(
-                        "XTTS synthesis failed for segment %d (%r):\n%s",
-                        i, text[:60], traceback.format_exc(),
-                    )
-                    raise RuntimeError(
-                        f"XTTS failed on segment {i}: {e}\n"
-                        "See full traceback in logs above.\n"
-                        "Quick fixes:\n"
-                        "  pip install soundfile          ← most likely fix\n"
-                        "  pip install torchcodec         ← alternative\n"
-                        "  pip install --upgrade torchaudio\n"
-                        "  or switch to TTS_BACKEND='macos' in config"
-                    ) from e
+                    log.error("XTTS segment %d failed:\n%s", seg_idx, traceback.format_exc())
+                    raise RuntimeError(f"XTTS failed on segment {seg_idx}: {e}") from e
 
-        log.info("XTTS-v2 generation complete (%d segments).", len(results))
+                if not seg_waves:
+                    results.append(_silent_segment(text, sample_rate))
+                    continue
+
+                # Concatenate all chunks for this segment
+                waveform = np.concatenate(seg_waves)
+
+                # Normalise to -1 dB peak
+                peak = np.max(np.abs(waveform))
+                if peak > 0:
+                    waveform = waveform / peak * 0.891  # -1 dB
+
+                samples = (waveform * 32767).astype(np.int16)
+                dur     = len(samples) / sample_rate
+                log.info("    Segment %d done: %.2fs", seg_idx, dur)
+
+                results.append({
+                    "samples":     samples,
+                    "sample_rate": sample_rate,
+                    "phrases":     [{"text": cleaned, "start": 0.0, "end": dur}],
+                })
+
+        log.info("XTTS-v2 complete (%d segments).", len(results))
         return results
 
 
-def _silent_segment(text: str, sample_rate: int, duration: float = 2.0) -> dict:
+def _silent_segment(text, sample_rate, duration=2.0):
     return {
         "samples":     np.zeros(int(sample_rate * duration), dtype=np.int16),
         "sample_rate": sample_rate,
         "phrases":     [{"text": text, "start": 0.0, "end": duration}],
     }
-
-
-def _float_to_int16(waveform: np.ndarray) -> np.ndarray:
-    max_val = np.max(np.abs(waveform))
-    if max_val > 0:
-        waveform = waveform / max_val * 0.95
-    return (waveform * 32767).astype(np.int16)
