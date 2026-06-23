@@ -23,7 +23,7 @@ LANGUAGE = "hi"
 # ─────────────────────────────────────────────────────────────
 # "reel" -> vertical 1080x1920, for Shorts/Reels
 # "full" -> landscape 1920x1080, for regular YouTube videos
-OUTPUT_MODE = "full"
+OUTPUT_MODE = "reel"
 
 YOUTUBE_WIDTH = 1920
 YOUTUBE_HEIGHT = 1080
@@ -39,7 +39,7 @@ OUTPUT_FPS = 30
 # "macos" configurable installed system voices, zero setup.
 TTS_BACKEND = "xtts"
 
-XTTS_VOICE_SAMPLE = "assets/my_voice_sample.wav"
+XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
 
 MACOS_TTS_VOICE = "Lekha"
 MACOS_TTS_VOICES = {
@@ -82,7 +82,7 @@ EXTRA_PHONETIC_DICT: dict[str, str] = {}
 #  BACKGROUND / SLIDESHOW
 # ─────────────────────────────────────────────────────────────
 BACKGROUND_IMAGE_PATHS: list[str] = []
-BACKGROUND_DIR = "assets/backgrounds"
+BACKGROUND_DIR = "background"
 
 # ─────────────────────────────────────────────────────────────
 #  SUMMARY LENGTH — story mode can shorten content; qa mode never does
@@ -188,7 +188,7 @@ STORY_STROKE_WIDTH       = 6                 # outline thickness in pixels
 # ── Channel logo badge (top-right corner) ────────────────────
 # Set STORY_CHANNEL_NAME to your channel name to show a pill badge.
 # Leave empty ("") to hide the badge entirely.
-STORY_CHANNEL_NAME       = "विचार ज्ञानी"   # ← change to your channel name
+STORY_CHANNEL_NAME       = "Ai Interview Guru"   # ← change to your channel name
 STORY_LOGO_FONT_SIZE     = 30
 STORY_LOGO_BG_COLOR      = (0, 0, 0)         # badge background (RGB)
 STORY_LOGO_TEXT_COLOR    = (255, 255, 255)   # badge text colour

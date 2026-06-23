@@ -25,7 +25,7 @@ OUTPUT_FPS     = 30
 # ─────────────────────────────────────────────────────────────
 TTS_BACKEND = "xtts"
 
-XTTS_VOICE_SAMPLE = "assets/clean_voice.wav"
+XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
 
 MACOS_TTS_VOICE = "Samantha"
 MACOS_TTS_VOICES = {
