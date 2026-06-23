@@ -234,3 +234,4 @@ yt-env/
 .venv
 background/
 temp/
+myenv/
