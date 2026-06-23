@@ -198,6 +198,21 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
 
 
 def run(qa_path: str, title: str = "interview_prep", cfg=default_cfg, keep_temp: bool = False) -> dict:
+    """File-based entry point (CLI). Loads the Q&A file, then delegates to
+    run_from_segments() for the rest of the pipeline."""
+    _step("STEP 1 / 3 — Loading Q&A file")
+    selected = load_qa_file(qa_path, cfg)
+    log.info("Loaded %d question/answer pairs", len(selected) // 4)
+    return run_from_segments(selected, title=title, cfg=cfg, keep_temp=keep_temp)
+
+
+def run_from_segments(selected: list[dict], title: str = "interview_prep",
+                       cfg=default_cfg, keep_temp: bool = False) -> dict:
+    """
+    Core pipeline, decoupled from file I/O. `selected` is the segment list
+    produced either by qa_mode.loader.load_qa_file() (CLI) or
+    qa_mode.loader.build_qa_segments() (API, given in-memory Q&A pairs).
+    """
     total_start = time.time()
     ensure_dirs(cfg.OUTPUT_DIR, cfg.TEMP_DIR, cfg.ASSETS_DIR)
 
@@ -205,10 +220,6 @@ def run(qa_path: str, title: str = "interview_prep", cfg=default_cfg, keep_temp:
     get_strategy(cfg.TTS_BACKEND).check_available(cfg)
 
     font_path = find_hindi_font(cfg)
-
-    _step("STEP 1 / 3 — Loading Q&A file")
-    selected = load_qa_file(qa_path, cfg)
-    log.info("Loaded %d question/answer pairs", len(selected) // 4)
 
     _step("STEP 2 / 3 — Generating narration")
     tts_audio_path = generate_tts_audio(selected, cfg)

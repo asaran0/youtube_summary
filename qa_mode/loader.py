@@ -25,16 +25,38 @@ Every chunk carries a "style" tag that core/render/subtitles.py uses
 import re
 
 
+def parse_qa_text(raw: str) -> list[tuple[str, str]]:
+    """Parse raw 'Q: ... A: ...' text into a list of (question, answer) tuples.
+    Shared by load_qa_file() (reads from disk) and the API's text/file-upload
+    input path (reads from an uploaded file or request body)."""
+    pattern = re.compile(r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)", re.DOTALL)
+    pairs = pattern.findall(raw)
+    if not pairs:
+        raise ValueError("No 'Q: ... A: ...' pairs found in the given text")
+    return pairs
+
+
 def load_qa_file(path: str, cfg) -> list[dict]:
     """Read a Q&A file and return segments ready for TTS + rendering."""
     with open(path, encoding="utf-8") as f:
         raw = f.read()
 
-    pattern = re.compile(r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)", re.DOTALL)
-    pairs = pattern.findall(raw)
-
-    if not pairs:
+    try:
+        pairs = parse_qa_text(raw)
+    except ValueError:
         raise ValueError(f"No 'Q: ... A: ...' pairs found in {path}")
+
+    return build_qa_segments(pairs, cfg)
+
+
+def build_qa_segments(pairs: list[tuple[str, str]], cfg) -> list[dict]:
+    """
+    Build TTS/render-ready segments from an in-memory list of (question, answer)
+    pairs. This is the shared core used by load_qa_file() (CLI/file input) and
+    by the API (direct JSON input) — the file is just one way to produce `pairs`.
+    """
+    if not pairs:
+        raise ValueError("No Q/A pairs provided")
 
     segments = []
     seg_id = 0

@@ -25,3 +25,8 @@ soundfile>=0.12.0
 # Note: "macos" backend (the default in both story_mode/config.py and
 # qa_mode/config.py) needs no extra Python packages — it uses the
 # built-in macOS `say` command.
+
+# ── API backend ──────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
