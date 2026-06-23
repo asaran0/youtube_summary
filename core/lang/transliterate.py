@@ -51,9 +51,14 @@ def clean_text(text: str, cfg) -> str:
     and excess whitespace — then applies language-specific handling
     based on cfg.LANGUAGE ("hi" / "en" / "hig").
     """
+    # text = re.sub(r"https?://\S+", "", text)
+    # text = re.sub(r"\[.*?\]", "", text)
+    # text = re.sub(r"\(.*?\)", "", text)
+    # text = re.sub(r"[।\.]{2,}", "।", text)
+    # text = re.sub(r"\s+", " ", text).strip()
+
     text = re.sub(r"https?://\S+", "", text)
     text = re.sub(r"\[.*?\]", "", text)
-    text = re.sub(r"\(.*?\)", "", text)
     text = re.sub(r"[।\.]{2,}", "।", text)
     text = re.sub(r"\s+", " ", text).strip()
 

@@ -12,7 +12,7 @@ LANGUAGE = "en"
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
 # ─────────────────────────────────────────────────────────────
-OUTPUT_MODE = "full"
+OUTPUT_MODE = "reel"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -25,7 +25,7 @@ OUTPUT_FPS     = 30
 # ─────────────────────────────────────────────────────────────
 TTS_BACKEND = "xtts"
 
-XTTS_VOICE_SAMPLE = "assets/clean_voice.wav"
+XTTS_VOICE_SAMPLE = "assets/converted_audio.wav"
 
 MACOS_TTS_VOICE = "Samantha"
 MACOS_TTS_VOICES = {
