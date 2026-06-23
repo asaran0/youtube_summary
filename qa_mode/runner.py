@@ -22,6 +22,11 @@ log = get_logger("qa.runner")
 
 
 def _build_qa_pairs(selected: list[dict]) -> list[dict]:
+    """
+    Collapse flat segments into one dict per Q/A pair.
+    spoken_words  — words from TTS text (parens stripped) — drives timing/highlight
+    display_text  — full text including parens, with paragraph line breaks
+    """
     pairs = []
     i = 0
     while i < len(selected):
@@ -36,13 +41,21 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
                 ans     = selected[j]
                 a_start = ans.get("new_start", ans.get("start", 0.0))
                 a_end   = ans.get("new_end",   ans.get("end",   a_start + 1.0))
+
+                # spoken_text: what TTS speaks (parens stripped) — for timing
+                spoken_text  = ans.get("spoken_text", ans.get("text", ""))
+                # display_text: what screen shows (parens kept, paragraphs)
+                display_text = ans.get("display_text", spoken_text)
+
                 pairs.append({
-                    "question":    question_text,
-                    "answer":      ans.get("display_text", ans.get("text", "")),
-                    "video_start": q_start,
-                    "video_end":   a_end,
-                    "ans_start":   a_start,
-                    "ans_end":     a_end,
+                    "question":      question_text,
+                    "display_text":  display_text,
+                    "spoken_words":  spoken_text.split(),   # drives highlight timing
+                    "display_words": display_text.split(),  # drives word reveal on screen
+                    "video_start":   q_start,
+                    "video_end":     a_end,
+                    "ans_start":     a_start,
+                    "ans_end":       a_end,
                 })
                 i = j + 1
             else:
@@ -54,7 +67,7 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
 
 def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_path, cfg) -> str:
     from qa_mode.qa_slideshow import (
-        _load_fonts, _wrap_text_px, _paginate, _paginate_by_sentence, _render_slide,
+        _load_fonts, _wrap_text_px, _paginate, _render_slide,
         _line_height, _parse_color, _count_words_in_lines,
     )
     from moviepy import AudioFileClip, VideoClip
@@ -69,7 +82,8 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     # Rescale placeholder timestamps if TTS didn't write new_start/new_end
     last_end = qa_pairs[-1]["video_end"]
     if last_end < audio_dur * 0.5:
-        log.warning("Rescaling placeholder timestamps (last=%.1fs audio=%.1fs)", last_end, audio_dur)
+        log.warning("Rescaling placeholder timestamps (last=%.1fs audio=%.1fs)",
+                    last_end, audio_dur)
         scale = audio_dur / max(last_end, 0.001)
         for p in qa_pairs:
             p["video_start"] *= scale
@@ -90,43 +104,39 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     q_band_h = int(target_h * split_ratio)
     a_band_h = target_h - q_band_h
 
-    q_bg    = _parse_color(getattr(cfg, "QA_SLIDE_QUESTION_BG",    (205, 139,  97)))
-    a_bg    = _parse_color(getattr(cfg, "QA_SLIDE_ANSWER_BG",      (183, 204, 174)))
-    q_color = _parse_color(getattr(cfg, "QA_SLIDE_QUESTION_COLOR", (30,  30,  30)))
-    a_color = _parse_color(getattr(cfg, "QA_SLIDE_ANSWER_COLOR",   (30,  30,  30)))
+    q_bg     = _parse_color(getattr(cfg, "QA_SLIDE_QUESTION_BG",    (205, 139,  97)))
+    a_bg     = _parse_color(getattr(cfg, "QA_SLIDE_ANSWER_BG",      (183, 204, 174)))
+    q_color  = _parse_color(getattr(cfg, "QA_SLIDE_QUESTION_COLOR", (30,  30,  30)))
+    a_color  = _parse_color(getattr(cfg, "QA_SLIDE_ANSWER_COLOR",   (30,  30,  30)))
     hi_color = _parse_color(getattr(cfg, "QA_SLIDE_HIGHLIGHT_COLOR",
-                             getattr(cfg, "SUBTITLE_HIGHLIGHT_COLOR", (255, 178, 0))))
+                             getattr(cfg, "SUBTITLE_HIGHLIGHT_COLOR", (220, 120, 0))))
 
     font_q, font_a = _load_fonts(font_path, cfg)
     text_w      = target_w - 2 * margin_side
     a_line_h    = _line_height(font_a)
+    para_gap    = int(a_line_h * 0.6)   # extra gap between paragraphs
     avail_a_h   = a_band_h - margin_top_a - margin_bot_a
     max_a_lines = max(1, avail_a_h // (a_line_h + 4))
 
-    # Pre-compute per-pair data
+    # Pre-compute per-pair entry data
     entries = []
     for pair in qa_pairs:
-        all_words  = pair["answer"].split()
-        all_lines  = _wrap_text_px(pair["answer"], font_a, text_w)
-        all_pages  = _paginate_by_sentence(pair["answer"], font_a, text_w, max_a_lines)
-        # Word count per page (for tracking which page a word falls on)
-        page_word_counts = [_count_words_in_lines(p) for p in all_pages]
+        # Wrap display text — respecting \n\n paragraph breaks
+        all_display_lines = _wrap_paragraphs(pair["display_text"], font_a, text_w)
         entries.append({
-            "q_lines":          _wrap_text_px(pair["question"], font_q, text_w),
-            "all_words":        all_words,
-            "all_lines":        all_lines,
-            "all_pages":        all_pages,
-            "page_word_counts": page_word_counts,
-            "v_start":          pair["video_start"],
-            "v_end":            pair["video_end"],
-            "a_start":          pair["ans_start"],
-            "a_end":            pair["ans_end"],
+            "q_lines":           _wrap_text_px(pair["question"], font_q, text_w),
+            "spoken_words":      pair["spoken_words"],   # for timing
+            "display_words":     pair["display_words"],  # for reveal (includes paren words)
+            "all_display_lines": all_display_lines,      # pre-wrapped with para marks
+            "v_start":           pair["video_start"],
+            "v_end":             pair["video_end"],
+            "a_start":           pair["ans_start"],
+            "a_end":             pair["ans_end"],
         })
 
     total_dur = min(entries[-1]["v_end"], audio_dur)
 
     def make_frame(t):
-        # Find current entry
         entry = None
         for e in entries:
             if e["v_start"] <= t < e["v_end"]:
@@ -136,50 +146,61 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
             entry = entries[-1]
 
         if t < entry["a_start"]:
-            # Question phase — show question, empty answer
-            img = _render_slide(
+            # Question phase — blank answer band
+            img = _render_slide_paragraphs(
                 video_width=target_w, video_height=target_h,
                 q_band_h=q_band_h, a_band_h=a_band_h,
                 q_bg=q_bg, a_bg=a_bg,
-                q_lines=entry["q_lines"], a_lines=[],
+                q_lines=entry["q_lines"], para_lines=[],
                 font_q=font_q, font_a=font_a,
                 q_color=q_color, a_color=a_color,
                 margin_side=margin_side,
                 margin_top_q=margin_top_q, margin_top_a=margin_top_a,
+                para_gap=para_gap, max_lines=max_a_lines,
                 active_word=-1, highlight_color=hi_color,
             )
             return np.array(img)
 
-        # Answer phase — word-by-word reveal with highlight on current word
-        ans_dur     = max(entry["a_end"] - entry["a_start"], 0.001)
-        progress    = (t - entry["a_start"]) / ans_dur
-        total_words = len(entry["all_words"])
+        # Answer phase ─────────────────────────────────────────────────
+        ans_dur = max(entry["a_end"] - entry["a_start"], 0.001)
+        progress = (t - entry["a_start"]) / ans_dur
 
-        # active_word: the word currently being spoken (highlighted)
-        # visible_words: all words shown so far (revealed = active + past)
-        active_word  = min(int(progress * total_words), total_words - 1)
-        visible_n    = active_word + 1   # show up to and including the active word
+        # active_word: index into SPOKEN words (drives timing/highlight)
+        spoken_total  = len(entry["spoken_words"])
+        active_spoken = min(int(progress * spoken_total), spoken_total - 1)
 
-        visible_text = " ".join(entry["all_words"][:visible_n])
-        pages        = _paginate_by_sentence(visible_text, font_a, text_w, max_a_lines)
-        cur_page     = pages[-1] if pages else []
-
-        # active_word offset within cur_page
-        # Words before this page have already been shown; subtract them
-        words_before_page = sum(
-            _count_words_in_lines(pages[i]) for i in range(len(pages) - 1)
+        # Map spoken word index → display word index
+        # spoken words are a subset of display words (parens stripped).
+        # We find the Nth spoken word's position in the display word list.
+        active_display = _spoken_to_display_idx(
+            active_spoken, entry["spoken_words"], entry["display_words"]
         )
-        page_active = active_word - words_before_page
 
-        img = _render_slide(
+        # Reveal display words up to and including active_display
+        visible_n    = active_display + 1
+        visible_text = " ".join(entry["display_words"][:visible_n])
+
+        # Re-wrap with paragraph awareness
+        vis_para_lines = _wrap_paragraphs(visible_text, font_a, text_w)
+        pages = _paginate_paras(vis_para_lines, max_a_lines)
+        cur_page = pages[-1] if pages else []
+
+        # Compute active word index within current page
+        words_before_page = sum(
+            _count_para_words(pages[pi]) for pi in range(len(pages) - 1)
+        )
+        page_active = active_display - words_before_page
+
+        img = _render_slide_paragraphs(
             video_width=target_w, video_height=target_h,
             q_band_h=q_band_h, a_band_h=a_band_h,
             q_bg=q_bg, a_bg=a_bg,
-            q_lines=entry["q_lines"], a_lines=cur_page,
+            q_lines=entry["q_lines"], para_lines=cur_page,
             font_q=font_q, font_a=font_a,
             q_color=q_color, a_color=a_color,
             margin_side=margin_side,
             margin_top_q=margin_top_q, margin_top_a=margin_top_a,
+            para_gap=para_gap, max_lines=max_a_lines,
             active_word=page_active, highlight_color=hi_color,
         )
         return np.array(img)
@@ -196,22 +217,149 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     return final_path
 
 
+# ── Paragraph-aware text helpers ──────────────────────────────────────────────
+
+def _wrap_paragraphs(text: str, font, max_width: int) -> list:
+    """
+    Wrap text into lines, treating \\n\\n as paragraph breaks.
+    Returns a list where each item is either:
+      - a string (a line of text)
+      - None   (paragraph separator — renders as extra vertical gap)
+    """
+    from qa_mode.qa_slideshow import _wrap_text_px
+    result = []
+    paragraphs = re.split(r'\n\n+', text)
+    for pi, para in enumerate(paragraphs):
+        para = para.strip()
+        if not para:
+            continue
+        lines = _wrap_text_px(para, font, max_width)
+        result.extend(lines)
+        if pi < len(paragraphs) - 1:
+            result.append(None)   # paragraph break marker
+    return result
+
+
+def _paginate_paras(para_lines: list, max_lines: int) -> list[list]:
+    """Paginate para_lines (strings + None markers) respecting max_lines."""
+    if not para_lines:
+        return [[]]
+    pages, current, line_count = [], [], 0
+    for item in para_lines:
+        if item is None:
+            current.append(None)
+        else:
+            if line_count >= max_lines:
+                pages.append(current)
+                current, line_count = [], 0
+            current.append(item)
+            line_count += 1
+    if current:
+        pages.append(current)
+    return pages if pages else [[]]
+
+
+def _count_para_words(para_lines: list) -> int:
+    """Count words across a page of para_lines (skip None markers)."""
+    from qa_mode.qa_slideshow import _text_tokens
+    return sum(
+        1 for item in para_lines if item is not None
+        for t in _text_tokens(item) if t.strip()
+    )
+
+
+def _spoken_to_display_idx(spoken_idx: int, spoken_words: list, display_words: list) -> int:
+    """
+    Map an index in spoken_words to the corresponding index in display_words.
+
+    spoken_words = display_words with parenthetical words removed.
+    We walk display_words, skipping words that are inside parentheses,
+    and count until we've matched spoken_idx+1 spoken words.
+    """
+    import re
+    spoken_count = 0
+    inside_paren = 0
+    for disp_idx, word in enumerate(display_words):
+        # Track paren depth
+        inside_paren += word.count('(') - word.count(')')
+        in_paren = inside_paren > 0 or (
+            word.startswith('(') and not word.endswith(')')
+        )
+        # A word is "spoken" if it's not inside parens and not pure punctuation
+        clean = re.sub(r'[().,;:!?]', '', word)
+        if clean and not in_paren and not (word.startswith('(') or word.endswith(')')):
+            if spoken_count == spoken_idx:
+                return disp_idx
+            spoken_count += 1
+
+    return len(display_words) - 1
+
+
+# ── Paragraph-aware slide renderer ───────────────────────────────────────────
+
+def _render_slide_paragraphs(
+    video_width, video_height,
+    q_band_h, a_band_h,
+    q_bg, a_bg,
+    q_lines, para_lines,
+    font_q, font_a,
+    q_color, a_color,
+    margin_side, margin_top_q, margin_top_a,
+    para_gap, max_lines,
+    active_word=-1,
+    highlight_color=(220, 120, 0),
+):
+    from qa_mode.qa_slideshow import _line_height, _text_width, _text_tokens, _parse_color
+    from PIL import Image, ImageDraw
+
+    img  = Image.new("RGB", (video_width, video_height))
+    draw = ImageDraw.Draw(img)
+
+    draw.rectangle([0, 0, video_width, q_band_h], fill=q_bg)
+    draw.rectangle([0, q_band_h, video_width, video_height], fill=a_bg)
+
+    # ── Question — vertically centred in top band ─────────────────────────
+    q_lh      = _line_height(font_q)
+    total_q_h = len(q_lines) * q_lh + max(0, len(q_lines) - 1) * 8
+    y = max((q_band_h - total_q_h) // 2, margin_top_q)
+    for line in q_lines:
+        tw = _text_width(draw, line, font_q)
+        x  = (video_width - tw) // 2
+        draw.text((x + 2, y + 2), line, font=font_q, fill=(0, 0, 0, 50))
+        draw.text((x, y), line, font=font_q, fill=q_color)
+        y += q_lh + 8
+
+    # ── Answer — paragraph-aware, with highlight on active word ───────────
+    a_lh       = _line_height(font_a)
+    y          = q_band_h + margin_top_a
+    word_index = 0
+
+    for item in para_lines:
+        if item is None:
+            # Paragraph break — extra vertical gap
+            y += para_gap
+            continue
+        line = item
+        x = margin_side
+        tokens = _text_tokens(line)
+        for token in tokens:
+            is_word = bool(token.strip())
+            color = highlight_color if (is_word and word_index == active_word) else a_color
+            draw.text((x, y), token, font=font_a, fill=color)
+            x += _text_width(draw, token, font_a)
+            if is_word:
+                word_index += 1
+        y += a_lh + 4
+
+    return img
+
+
+# ── Pipeline entry point ──────────────────────────────────────────────────────
+
+import re   # needed by helpers above
+
+
 def run(qa_path: str, title: str = "interview_prep", cfg=default_cfg, keep_temp: bool = False) -> dict:
-    """File-based entry point (CLI). Loads the Q&A file, then delegates to
-    run_from_segments() for the rest of the pipeline."""
-    _step("STEP 1 / 3 — Loading Q&A file")
-    selected = load_qa_file(qa_path, cfg)
-    log.info("Loaded %d question/answer pairs", len(selected) // 4)
-    return run_from_segments(selected, title=title, cfg=cfg, keep_temp=keep_temp)
-
-
-def run_from_segments(selected: list[dict], title: str = "interview_prep",
-                       cfg=default_cfg, keep_temp: bool = False) -> dict:
-    """
-    Core pipeline, decoupled from file I/O. `selected` is the segment list
-    produced either by qa_mode.loader.load_qa_file() (CLI) or
-    qa_mode.loader.build_qa_segments() (API, given in-memory Q&A pairs).
-    """
     total_start = time.time()
     ensure_dirs(cfg.OUTPUT_DIR, cfg.TEMP_DIR, cfg.ASSETS_DIR)
 
@@ -220,10 +368,14 @@ def run_from_segments(selected: list[dict], title: str = "interview_prep",
 
     font_path = find_hindi_font(cfg)
 
+    _step("STEP 1 / 3 — Loading Q&A file")
+    selected = load_qa_file(qa_path, cfg)
+    log.info("Loaded %d Q/A pairs", len(selected) // 4)
+
     _step("STEP 2 / 3 — Generating narration")
     tts_audio_path = generate_tts_audio(selected, cfg)
     summary_dur = selected[-1].get("new_end", get_video_duration(tts_audio_path))
-    log.info("Narration duration: %s", human_duration(summary_dur))
+    log.info("Narration: %s", human_duration(summary_dur))
 
     _step("STEP 3 / 3 — Building video")
     safe_title = _safe_title(title)
@@ -238,7 +390,7 @@ def run_from_segments(selected: list[dict], title: str = "interview_prep",
     )
 
     if use_split:
-        log.info("Split-layout renderer (lang=%s, highlight=ON)", getattr(cfg, "LANGUAGE", "?"))
+        log.info("Split-layout renderer (lang=%s)", getattr(cfg, "LANGUAGE", "?"))
         final_video_path = _run_split_layout(
             selected, tts_audio_path, title, target_w, target_h, font_path, cfg,
         )
@@ -264,11 +416,9 @@ def run_from_segments(selected: list[dict], title: str = "interview_prep",
     if not keep_temp:
         clean_temp(cfg)
 
-    log.info("Total time: %s", human_duration(time.time() - total_start))
-    return {
-        "video_path": final_video_path, "srt_path": srt_path,
-        "meta_path": meta_path, "summary_duration": summary_dur,
-    }
+    log.info("Total: %s", human_duration(time.time() - total_start))
+    return {"video_path": final_video_path, "srt_path": srt_path,
+            "meta_path": meta_path, "summary_duration": summary_dur}
 
 
 def _step(msg):
@@ -276,7 +426,6 @@ def _step(msg):
 
 
 def _safe_title(title, max_len=40):
-    import re
     safe = re.sub(r"[^\w\s\-]", "", title)
     safe = re.sub(r"\s+", "_", safe.strip())
     return safe[:max_len] or "interview_prep"

@@ -1,11 +1,12 @@
 """
 story_mode/runner.py — Story mode pipeline.
 
-text file -> load -> summarize (optional shortening) -> storytelling
-narration -> TTS -> subtitles -> slideshow -> metadata
+text file -> load -> summarize -> storytelling -> TTS
+-> story_render (new YouTube-style visual) or legacy subtitle overlay
 """
 
 import os
+import re
 import time
 
 from utils import (
@@ -27,18 +28,13 @@ log = get_logger("story.runner")
 
 
 def run(text_path: str, title: str = "summary", cfg=default_cfg, keep_temp: bool = False) -> dict:
-    """
-    Run the full story-mode pipeline. Returns a dict with output paths.
-    """
     total_start = time.time()
 
-    log.info("Checking dependencies …")
     ensure_dirs(cfg.OUTPUT_DIR, cfg.TEMP_DIR, cfg.ASSETS_DIR)
 
     from core.tts.factory import get_strategy
     get_strategy(cfg.TTS_BACKEND).check_available(cfg)
 
-    log.info("Looking for Hindi font …")
     font_path = find_hindi_font(cfg)
 
     _step("STEP 1 / 4 — Loading story text")
@@ -46,8 +42,8 @@ def run(text_path: str, title: str = "summary", cfg=default_cfg, keep_temp: bool
     log.info("Loaded %d sentences from %s", len(segments), text_path)
 
     _step("STEP 2 / 4 — Selecting segments")
-    result = select_segments(segments, 0.0, cfg)
-    selected = result["selected_segments"]
+    result       = select_segments(segments, 0.0, cfg)
+    selected     = result["selected_segments"]
     topic_groups = result["topic_groups"]
     log.info("Kept %.0f%% of content", result["kept_ratio"] * 100)
 
@@ -55,49 +51,75 @@ def run(text_path: str, title: str = "summary", cfg=default_cfg, keep_temp: bool
 
     _step("STEP 3 / 4 — Generating narration")
     tts_audio_path = generate_tts_audio(selected, cfg)
-    summary_dur = selected[-1]["new_end"] if selected else get_video_duration(tts_audio_path)
-    topic_groups = _retime_topic_groups(topic_groups, selected)
+    summary_dur    = selected[-1]["new_end"] if selected else get_video_duration(tts_audio_path)
+    topic_groups   = _retime_topic_groups(topic_groups, selected)
     log.info("Narration duration: %s", human_duration(summary_dur))
 
-    _step("STEP 4 / 4 — Subtitles + slideshow + metadata")
-    safe_title = _safe_title(title)
-    srt_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}.srt")
+    _step("STEP 4 / 4 — Building video")
+    safe_title  = _safe_title(title)
     target_w, target_h = cfg.video_dimensions()
+    use_new     = getattr(cfg, "STORY_USE_NEW_RENDERER", True)
 
-    ass_path = subtitle_render.generate_subtitle_files(
-        selected_chunks=selected,
-        output_srt_path=srt_path,
-        font_path=font_path,
-        video_width=target_w,
-        video_height=target_h,
-        cfg=cfg,
-        style_resolver=resolve_style,
-    )
-
-    no_sub_path = os.path.join(cfg.TEMP_DIR, "summary_no_sub.mp4")
-    slideshow_render.compile_slideshow_video(
-        selected_chunks=selected,
-        audio_path=tts_audio_path,
-        output_path=no_sub_path,
-        video_width=target_w,
-        video_height=target_h,
-        font_path=font_path,
-        cfg=cfg,
-        title=title,
-        topic_groups=topic_groups,
-    )
-
-    font_dir = os.path.dirname(os.path.abspath(font_path))
-    final_video_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}_summary.mp4")
-    subtitle_render.burn_subtitles(
-        input_video=no_sub_path,
-        ass_path=ass_path,
-        output_video=final_video_path,
-        font_dir=font_dir,
-        cfg=cfg,
-        style_resolver=resolve_style,
-        font_path=font_path,
-    )
+    if use_new:
+        from story_mode.story_render import compile_story_video
+        final_video_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}_summary.mp4")
+        log.info("Using YouTube-style story renderer")
+        compile_story_video(
+            selected_chunks=selected,
+            audio_path=tts_audio_path,
+            output_path=final_video_path,
+            video_width=target_w,
+            video_height=target_h,
+            font_path=font_path,
+            cfg=cfg,
+            title=title,
+        )
+        # Still generate SRT for upload
+        srt_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}.srt")
+        subtitle_render.generate_subtitle_files(
+            selected_chunks=selected,
+            output_srt_path=srt_path,
+            font_path=font_path,
+            video_width=target_w,
+            video_height=target_h,
+            cfg=cfg,
+            style_resolver=resolve_style,
+        )
+    else:
+        # Legacy subtitle-overlay path
+        srt_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}.srt")
+        ass_path = subtitle_render.generate_subtitle_files(
+            selected_chunks=selected,
+            output_srt_path=srt_path,
+            font_path=font_path,
+            video_width=target_w,
+            video_height=target_h,
+            cfg=cfg,
+            style_resolver=resolve_style,
+        )
+        no_sub_path = os.path.join(cfg.TEMP_DIR, "summary_no_sub.mp4")
+        slideshow_render.compile_slideshow_video(
+            selected_chunks=selected,
+            audio_path=tts_audio_path,
+            output_path=no_sub_path,
+            video_width=target_w,
+            video_height=target_h,
+            font_path=font_path,
+            cfg=cfg,
+            title=title,
+            topic_groups=topic_groups,
+        )
+        font_dir = os.path.dirname(os.path.abspath(font_path))
+        final_video_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}_summary.mp4")
+        subtitle_render.burn_subtitles(
+            input_video=no_sub_path,
+            ass_path=ass_path,
+            output_video=final_video_path,
+            font_dir=font_dir,
+            cfg=cfg,
+            style_resolver=resolve_style,
+            font_path=font_path,
+        )
 
     meta_path = metadata_writer.generate_and_save(
         title_seed=title,
@@ -112,11 +134,10 @@ def run(text_path: str, title: str = "summary", cfg=default_cfg, keep_temp: bool
         clean_temp(cfg)
 
     log.info("Total time: %s", human_duration(time.time() - total_start))
-
     return {
         "video_path": final_video_path,
-        "srt_path": srt_path,
-        "meta_path": meta_path,
+        "srt_path":   srt_path,
+        "meta_path":  meta_path,
         "summary_duration": summary_dur,
     }
 
@@ -126,7 +147,6 @@ def _step(msg: str) -> None:
 
 
 def _safe_title(title: str, max_len: int = 40) -> str:
-    import re
     safe = re.sub(r"[^\w\s\-]", "", title)
     safe = re.sub(r"\s+", "_", safe.strip())
     return safe[:max_len] or "summary"

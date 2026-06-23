@@ -12,7 +12,7 @@ LANGUAGE = "en"
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
 # ─────────────────────────────────────────────────────────────
-OUTPUT_MODE = "full"
+OUTPUT_MODE = "reel"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -38,7 +38,7 @@ MACOS_TTS_RATE = 125
 # Gap between question being spoken and answer starting: 1 second
 TTS_PAUSE_BETWEEN_SEGMENTS = 0.3
 TTS_PAUSE_BETWEEN_PHRASES  = 0.20
-TTS_ANSWER_PAUSE_EXTRA     = 1.0   # 1 second pause before answer begins
+TTS_ANSWER_PAUSE_EXTRA     = 0.3   # short pause before answer begins
 
 AUDIO_POST_PROCESSING = True
 AUDIO_FILTER = (
@@ -60,32 +60,6 @@ MMS_TTS_MODEL_IDS = {
     "hig": "facebook/mms-tts-hin",
     "en":  "facebook/mms-tts-eng",
 }
-
-# ── Kokoro-82M (TTS_BACKEND = "kokoro") ─────────────────────────
-# Lightweight (82M params), fast on CPU/MPS. English is strongest;
-# Hindi support is newer/thinner. No voice cloning — pick from a
-# fixed voice list. See core/tts/kokoro_strategy.py.
-KOKORO_LANG_CODES = {"en": "a", "hi": "h", "hig": "h"}
-KOKORO_VOICES = {"en": "af_heart", "hi": "hf_alpha", "hig": "hf_alpha"}
-KOKORO_SPEED = 1.0
-
-# ── AI4Bharat Indic Parler-TTS (TTS_BACKEND = "indic_parler") ──
-# Natural Indic + English speech, voice style steered by a plain-
-# English description prompt rather than a voice sample. Set
-# INDIC_PARLER_DESCRIPTION to override the per-language default below.
-# See core/tts/indic_parler_strategy.py.
-INDIC_PARLER_MODEL_ID = "ai4bharat/indic-parler-tts"
-INDIC_PARLER_DESCRIPTION = None  # None = use the built-in per-language default
-
-# ── Maya Research "Veena" (TTS_BACKEND = "veena") ───────────────
-# 3B-param Llama-based model, very natural Hindi/English/code-mixed
-# speech. Designed for CUDA + 4-bit quantization; on Apple Silicon
-# it falls back to an unquantized load, which is heavy and may not
-# be practical on a MacBook Air — see core/tts/veena_strategy.py.
-VEENA_MODEL_ID = "maya-research/veena-tts"
-VEENA_SPEAKER = "kavya"  # one of: kavya, agastya, maitri, vinaya
-VEENA_TEMPERATURE = 0.4
-VEENA_TOP_P = 0.9
 
 EXTRA_PHONETIC_DICT: dict[str, str] = {}
 

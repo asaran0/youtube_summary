@@ -167,3 +167,37 @@ def video_dimensions() -> tuple[int, int]:
     if OUTPUT_MODE == "reel":
         return REEL_WIDTH, REEL_HEIGHT
     return YOUTUBE_WIDTH, YOUTUBE_HEIGHT
+
+# ─────────────────────────────────────────────────────────────
+#  STORY VIDEO VISUAL SETTINGS  (story_mode/story_render.py)
+# ─────────────────────────────────────────────────────────────
+
+# ── Background ───────────────────────────────────────────────
+# Set to a video file path to use as looping background.
+# Leave empty ("") to use animated gradient backgrounds (default).
+STORY_BG_VIDEO = ""
+
+# ── Subtitle text ────────────────────────────────────────────
+# Large bold text shown word-by-word in the centre of the screen.
+STORY_SUBTITLE_FONT_SIZE = 95       # pixels — big and punchy
+STORY_TEXT_COLOR         = (255, 255, 255)   # white body text
+STORY_HIGHLIGHT_COLOR    = (100, 255, 80)    # green highlight (YouTube style)
+STORY_STROKE_COLOR       = (0, 0, 0)         # black outline
+STORY_STROKE_WIDTH       = 6                 # outline thickness in pixels
+
+# ── Channel logo badge (top-right corner) ────────────────────
+# Set STORY_CHANNEL_NAME to your channel name to show a pill badge.
+# Leave empty ("") to hide the badge entirely.
+STORY_CHANNEL_NAME       = "विचार ज्ञानी"   # ← change to your channel name
+STORY_LOGO_FONT_SIZE     = 30
+STORY_LOGO_BG_COLOR      = (0, 0, 0)         # badge background (RGB)
+STORY_LOGO_TEXT_COLOR    = (255, 255, 255)   # badge text colour
+
+# ── Waveform animation (bottom centre) ───────────────────────
+STORY_WAVEFORM_BARS         = 40    # number of animated bars
+STORY_WAVEFORM_HEIGHT_RATIO = 0.09  # fraction of video height
+STORY_WAVEFORM_COLOR        = None  # None = use palette accent colour
+STORY_WAVEFORM_BG_ALPHA     = 70    # strip transparency (0=invisible, 255=solid)
+
+# Use new story renderer instead of legacy subtitle-overlay approach
+STORY_USE_NEW_RENDERER   = True

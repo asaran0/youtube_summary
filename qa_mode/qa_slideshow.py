@@ -174,56 +174,6 @@ def _paginate(lines: list[str], max_per_page: int) -> list[list[str]]:
     return [lines[i : i + max_per_page] for i in range(0, len(lines), max_per_page)]
 
 
-def _split_sentences(text: str) -> list[str]:
-    """Split answer text into sentences on '.', '?', '!', '।' (Hindi
-    full stop). Keeps the terminator attached to its sentence, mirroring
-    story_mode/loader.py's sentence splitting."""
-    import re
-    parts = re.split(r"(?<=[।.!?])\s+", text.strip())
-    return [p for p in parts if p.strip()]
-
-
-def _paginate_by_sentence(text: str, font, max_width: int, max_lines_per_page: int) -> list[list[str]]:
-    """
-    Paginate answer text so each page holds one or more *complete*
-    sentences, never cutting a sentence across two pages — unless a single
-    sentence alone is longer than a full page, in which case only that
-    sentence falls back to a hard line-count split. This is what makes a
-    long answer read as "paragraph by paragraph" instead of an arbitrary
-    wall-of-text chopped at a fixed line count.
-    """
-    sentences = _split_sentences(text)
-    if not sentences:
-        return [[""]]
-
-    pages: list[list[str]] = []
-    current: list[str] = []
-
-    for sentence in sentences:
-        lines = _wrap_text_px(sentence, font, max_width)
-
-        if len(lines) > max_lines_per_page:
-            # A single sentence is too long for one page on its own —
-            # flush what we have, then hard-split just this sentence.
-            if current:
-                pages.append(current)
-                current = []
-            for i in range(0, len(lines), max_lines_per_page):
-                pages.append(lines[i : i + max_lines_per_page])
-            continue
-
-        if current and len(current) + len(lines) > max_lines_per_page:
-            pages.append(current)
-            current = list(lines)
-        else:
-            current.extend(lines)
-
-    if current:
-        pages.append(current)
-
-    return pages or [[""]]
-
-
 def _count_words_in_lines(lines: list[str]) -> int:
     return sum(1 for line in lines for t in _text_tokens(line) if t.strip())
 

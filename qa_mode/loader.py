@@ -2,79 +2,98 @@
 qa_mode/loader.py — Read a Q&A text file into TTS-ready segments.
 
 Input file format:
+    Q: What is an Abstract Class?
+    A: An abstract class can have both abstract methods (without a body)
+       and concrete methods (with a body).
 
-    Q: आपकी ताकत क्या है?
-    A: मेरी सबसे बड़ी ताकत यह है कि...
-
-    Q: आप इस कंपनी में क्यों काम करना चाहते हैं?
-    A: मैंने आपकी कंपनी के बारे में पढ़ा है...
-
-Each question becomes 4 chunks:
-  1. QUESTION     — spoken plainly, displayed with cfg.QA_QUESTION_LABEL_TEMPLATE
-                     (if cfg.QA_SHOW_QUESTION_LABEL), styled "question".
-  2. TRY_YOURSELF — silent, cfg.QA_TRY_YOURSELF_SECONDS long, displays
-                     cfg.QA_TRY_YOURSELF_TEXT, styled "try_yourself".
-  3. COUNTDOWN    — silent, cfg.QA_COUNTDOWN_SECONDS long, displays
-                     "3 2 1" countdown, styled "countdown".
-  4. ANSWER       — spoken normally, styled "answer".
-
-Every chunk carries a "style" tag that core/render/subtitles.py uses
-(via qa_mode/styles.py's resolve_style) to pick font size + color.
+Key behaviours:
+  • Parenthetical content like (without a body) is SHOWN on screen but
+    NOT spoken by TTS. This keeps the display rich while the word-by-word
+    highlight stays perfectly in sync with the voice.
+  • Answer display text is formatted into visual paragraphs by inserting
+    a newline after every sentence boundary (. ? ! ।).
+  • Pause after question is 1 second (TTS_ANSWER_PAUSE_EXTRA in config).
 """
 
 import re
 
 
-def parse_qa_text(raw: str) -> list[tuple[str, str]]:
-    """Parse raw 'Q: ... A: ...' text into a list of (question, answer) tuples.
-    Shared by load_qa_file() (reads from disk) and the API's text/file-upload
-    input path (reads from an uploaded file or request body)."""
-    pattern = re.compile(r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)", re.DOTALL)
-    pairs = pattern.findall(raw)
-    if not pairs:
-        raise ValueError("No 'Q: ... A: ...' pairs found in the given text")
-    return pairs
+# ── Text helpers ──────────────────────────────────────────────────────────────
 
+def _strip_parens(text: str) -> str:
+    """
+    Remove all parenthetical content for TTS narration.
+    '(without a body)' → '' so the spoken word count matches display.
+    Handles nested and multiple parentheses cleanly.
+    """
+    # Remove (...) content — repeat to handle nested
+    result = text
+    for _ in range(5):
+        new = re.sub(r'\([^()]*\)', '', result)
+        if new == result:
+            break
+        result = new
+    # Collapse extra spaces left behind
+    return re.sub(r'  +', ' ', result).strip()
+
+
+def _spoken_words(text: str) -> list[str]:
+    """Return the word list as TTS will speak them (parens stripped)."""
+    return _strip_parens(text).split()
+
+
+def _format_answer_display(text: str) -> str:
+    """
+    Format answer text for visual display:
+    - Preserve parenthetical content (shown on screen)
+    - Insert a blank line (\\n\\n) after every sentence ending (. ? ! ।)
+      so the answer reads as clean paragraphs, not one dense block.
+    """
+    # Normalise whitespace first
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    # Insert newline after sentence-ending punctuation followed by a capital/Hindi
+    # Pattern: punctuation + space + (capital letter OR Hindi char)
+    text = re.sub(
+        r'([.?!।])\s+(?=[A-Z\u0900-\u097F])',
+        r'\1\n\n',
+        text,
+    )
+    return text
+
+
+# ── Main loader ───────────────────────────────────────────────────────────────
 
 def load_qa_file(path: str, cfg) -> list[dict]:
     """Read a Q&A file and return segments ready for TTS + rendering."""
     with open(path, encoding="utf-8") as f:
         raw = f.read()
 
-    try:
-        pairs = parse_qa_text(raw)
-    except ValueError:
-        raise ValueError(f"No 'Q: ... A: ...' pairs found in {path}")
+    pattern = re.compile(r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)", re.DOTALL)
+    pairs = pattern.findall(raw)
 
-    return build_qa_segments(pairs, cfg)
-
-
-def build_qa_segments(pairs: list[tuple[str, str]], cfg) -> list[dict]:
-    """
-    Build TTS/render-ready segments from an in-memory list of (question, answer)
-    pairs. This is the shared core used by load_qa_file() (CLI/file input) and
-    by the API (direct JSON input) — the file is just one way to produce `pairs`.
-    """
     if not pairs:
-        raise ValueError("No Q/A pairs provided")
+        raise ValueError(f"No 'Q: ... A: ...' pairs found in {path}")
 
     segments = []
     seg_id = 0
+
     for q_num, (question, answer) in enumerate(pairs, start=1):
         question = " ".join(question.split())
-        answer = " ".join(answer.split())
+        answer_raw = " ".join(answer.split())
 
+        # ── Question ─────────────────────────────────────────────────────
         if cfg.QA_SHOW_QUESTION_LABEL:
             display_question = cfg.QA_QUESTION_LABEL_TEMPLATE.format(n=q_num) + question
         else:
             display_question = question
 
-        # 1. QUESTION — spoken plainly, no added cue, larger gold text
+        # Question: spoken text = display text (questions rarely have parens)
         segments.append({
             "id": seg_id,
             "start": float(seg_id),
             "end": float(seg_id + 1),
-            "text": question,
+            "text": _strip_parens(question),
             "display_text": display_question,
             "avg_logprob": -0.1,
             "no_speech_prob": 0.01,
@@ -82,7 +101,7 @@ def build_qa_segments(pairs: list[tuple[str, str]], cfg) -> list[dict]:
         })
         seg_id += 1
 
-        # 2. TRY_YOURSELF — silent, prompts viewer to pause and think
+        # ── Try yourself (silent) ────────────────────────────────────────
         segments.append({
             "id": seg_id,
             "start": float(seg_id),
@@ -97,7 +116,7 @@ def build_qa_segments(pairs: list[tuple[str, str]], cfg) -> list[dict]:
         })
         seg_id += 1
 
-        # 3. COUNTDOWN — silent, shows "3 2 1"
+        # ── Countdown (silent) ───────────────────────────────────────────
         countdown_text = " ".join(str(n) for n in range(cfg.QA_COUNTDOWN_SECONDS, 0, -1))
         segments.append({
             "id": seg_id,
@@ -113,13 +132,19 @@ def build_qa_segments(pairs: list[tuple[str, str]], cfg) -> list[dict]:
         })
         seg_id += 1
 
-        # 4. ANSWER — spoken normally, white text
+        # ── Answer ───────────────────────────────────────────────────────
+        # text       → TTS speaks this (parens stripped)
+        # display_text → shown on screen (parens kept, formatted into paragraphs)
+        spoken_text  = _strip_parens(answer_raw)
+        display_text = _format_answer_display(answer_raw)
+
         segments.append({
             "id": seg_id,
             "start": float(seg_id),
             "end": float(seg_id + 1),
-            "text": answer,
-            "display_text": answer,
+            "text": spoken_text,
+            "display_text": display_text,
+            "spoken_text": spoken_text,       # explicit field for runner highlight sync
             "avg_logprob": -0.1,
             "no_speech_prob": 0.01,
             "style": "answer",
