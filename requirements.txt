@@ -26,6 +26,21 @@ soundfile>=0.12.0
 # qa_mode/config.py) needs no extra Python packages — it uses the
 # built-in macOS `say` command.
 
+# ── Lightweight TTS — "kokoro" backend (qa_mode only, for now) ──
+# Optional: only needed if TTS_BACKEND = "kokoro". Also needs espeak-ng
+# (macOS: brew install espeak-ng). Uncomment to install:
+# kokoro>=0.9.4
+
+# ── Indic neural TTS — "indic_parler" backend (qa_mode only, for now) ──
+# Optional: only needed if TTS_BACKEND = "indic_parler". Uncomment to install:
+# git+https://github.com/huggingface/parler-tts.git
+
+# ── Maya Research Veena — "veena" backend (qa_mode only, for now) ──
+# Optional: only needed if TTS_BACKEND = "veena". Heavy (3B params),
+# designed for CUDA. Uncomment to install:
+# snac>=1.2.0
+# bitsandbytes>=0.43.0   # CUDA only — skip this one on Apple Silicon
+
 # ── API backend ──────────────────────────────────────────────
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0

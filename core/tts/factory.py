@@ -14,11 +14,17 @@ from core.tts.base import TTSStrategy
 from core.tts.xtts_strategy import XTTSStrategy
 from core.tts.mms_strategy import MMSStrategy
 from core.tts.macos_strategy import MacOSStrategy
+from core.tts.kokoro_strategy import KokoroStrategy
+from core.tts.indic_parler_strategy import IndicParlerStrategy
+from core.tts.veena_strategy import VeenaStrategy
 
 _STRATEGIES: dict[str, type[TTSStrategy]] = {
     "xtts": XTTSStrategy,
     "mms": MMSStrategy,
     "macos": MacOSStrategy,
+    "kokoro": KokoroStrategy,
+    "indic_parler": IndicParlerStrategy,
+    "veena": VeenaStrategy,
 }
 
 

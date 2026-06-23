@@ -31,7 +31,7 @@ class QAVideoRequest(BaseModel):
     output_mode: Optional[Literal["reel", "full"]] = Field(
         None, description="Override OUTPUT_MODE (vertical reel vs landscape full)"
     )
-    tts_backend: Optional[Literal["xtts", "mms", "macos"]] = Field(
+    tts_backend: Optional[Literal["xtts", "mms", "macos", "kokoro", "indic_parler", "veena"]] = Field(
         None, description="Override TTS_BACKEND"
     )
     voice_sample: Optional[str] = Field(
@@ -89,7 +89,7 @@ class BatchQAVideoRequest(BaseModel):
     # Optional config overrides — same as QAVideoRequest, applied to every part
     language: Optional[Literal["hi", "en", "hig"]] = None
     output_mode: Optional[Literal["reel", "full"]] = None
-    tts_backend: Optional[Literal["xtts", "mms", "macos"]] = None
+    tts_backend: Optional[Literal["xtts", "mms", "macos", "kokoro", "indic_parler", "veena"]] = None
     voice_sample: Optional[str] = None
     voice: Optional[str] = None
     keep_temp: bool = False

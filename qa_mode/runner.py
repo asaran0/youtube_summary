@@ -54,7 +54,7 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
 
 def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_path, cfg) -> str:
     from qa_mode.qa_slideshow import (
-        _load_fonts, _wrap_text_px, _paginate, _render_slide,
+        _load_fonts, _wrap_text_px, _paginate, _paginate_by_sentence, _render_slide,
         _line_height, _parse_color, _count_words_in_lines,
     )
     from moviepy import AudioFileClip, VideoClip
@@ -108,7 +108,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     for pair in qa_pairs:
         all_words  = pair["answer"].split()
         all_lines  = _wrap_text_px(pair["answer"], font_a, text_w)
-        all_pages  = _paginate(all_lines, max_a_lines)
+        all_pages  = _paginate_by_sentence(pair["answer"], font_a, text_w, max_a_lines)
         # Word count per page (for tracking which page a word falls on)
         page_word_counts = [_count_words_in_lines(p) for p in all_pages]
         entries.append({
@@ -161,8 +161,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         visible_n    = active_word + 1   # show up to and including the active word
 
         visible_text = " ".join(entry["all_words"][:visible_n])
-        vis_lines    = _wrap_text_px(visible_text, font_a, text_w)
-        pages        = _paginate(vis_lines, max_a_lines)
+        pages        = _paginate_by_sentence(visible_text, font_a, text_w, max_a_lines)
         cur_page     = pages[-1] if pages else []
 
         # active_word offset within cur_page
