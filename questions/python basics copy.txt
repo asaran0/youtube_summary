@@ -1,0 +1,382 @@
+Q: What is Python?
+A: Python is a high-level, interpreted, object-oriented programming language known for its simplicity, readability, and extensive standard library.
+
+Q: Who developed Python?
+A: Python was developed by Guido van Rossum and first released in 1991.
+
+Q: What are the main features of Python?
+A: Python is easy to learn, interpreted, object-oriented, platform-independent, dynamically typed, open-source, and supports a large standard library.
+
+Q: What is the difference between compiled and interpreted languages?
+A: Compiled languages are converted into machine code before execution, while interpreted languages execute code line by line. Python is an interpreted language.
+
+Q: Why is Python called a platform-independent language?
+A: Python programs can run on different operating systems such as Windows, Linux, and macOS without modifying the source code.
+
+Q: What are variables in Python?
+A: Variables are names used to store data values. Python automatically determines the variable's data type based on the assigned value.
+
+Q: What are the basic data types in Python?
+A: Common data types are int, float, str, bool, list, tuple, set, dictionary, and NoneType.
+
+Q: What is dynamic typing in Python?
+A: Dynamic typing means you do not need to declare the data type of a variable. Python determines the type at runtime.
+
+Q: What is the difference between int and float?
+A: int stores whole numbers, while float stores numbers with decimal points.
+
+Q: What is a string in Python?
+A: A string is a sequence of characters enclosed in single quotes, double quotes, or triple quotes.
+
+Q: What is a list in Python?
+A: A list is an ordered, mutable collection that allows duplicate elements.
+
+Q: What is a tuple in Python?
+A: A tuple is an ordered, immutable collection that allows duplicate elements.
+
+Q: What is a set in Python?
+A: A set is an unordered collection of unique elements. Duplicate values are automatically removed.
+
+Q: What is a dictionary in Python?
+A: A dictionary is a collection of key-value pairs. Keys are unique, and values can be of any data type.
+
+Q: What is the difference between a list and a tuple?
+A: Lists are mutable and can be modified after creation, whereas tuples are immutable and cannot be changed.
+
+Q: What are Python keywords?
+A: Keywords are reserved words with predefined meanings, such as if, else, for, while, def, class, and return.
+
+Q: What is indentation in Python?
+A: Indentation refers to the spaces at the beginning of a code block. It defines the structure of the program and is mandatory in Python.
+
+Q: What are comments in Python?
+A: Comments are non-executable lines used to explain code. Single-line comments begin with #, while multi-line comments use triple quotes.
+
+Q: What is the input() function?
+A: The input() function reads input from the user as a string.
+
+Q: What is the print() function?
+A: The print() function displays output on the screen.
+
+Q: What are operators in Python?
+A: Operators are symbols used to perform operations on variables and values, such as arithmetic, comparison, logical, assignment, and bitwise operations.
+
+Q: What are arithmetic operators in Python?
+A: Arithmetic operators include +, -, *, /, %, //, and ** for performing mathematical calculations.
+
+Q: What are comparison operators in Python?
+A: Comparison operators compare two values and return True or False. They include ==, !=, >, <, >=, and <=.
+
+Q: What are logical operators in Python?
+A: Logical operators are and, or, and not. They are used to combine or negate conditional expressions.
+
+Q: What is type casting in Python?
+A: Type casting is the process of converting one data type into another using functions such as int(), float(), str(), and bool().
+
+```text
+Q: What are conditional statements in Python?
+A: Conditional statements are used to make decisions in a program. The main conditional statements are if, elif, and else.
+
+Q: What is an if statement?
+A: The if statement executes a block of code only if the specified condition is True.
+
+Q: What is the purpose of the elif statement?
+A: The elif statement checks additional conditions if the previous if or elif condition is False.
+
+Q: What is the purpose of the else statement?
+A: The else statement executes a block of code when all previous conditions are False.
+
+Q: What is a nested if statement?
+A: A nested if statement is an if statement placed inside another if statement to check multiple conditions.
+
+Q: What is a loop in Python?
+A: A loop repeatedly executes a block of code until a specified condition is met.
+
+Q: What is a for loop?
+A: A for loop is used to iterate over a sequence such as a list, tuple, string, or range.
+
+Q: What is a while loop?
+A: A while loop repeatedly executes a block of code as long as the specified condition is True.
+
+Q: What is the range() function?
+A: The range() function generates a sequence of numbers and is commonly used with for loops.
+
+Q: What is the difference between a for loop and a while loop?
+A: A for loop is used when the number of iterations is known, while a while loop is used when the number of iterations depends on a condition.
+
+Q: What is the break statement?
+A: The break statement immediately terminates the nearest loop and transfers control to the next statement after the loop.
+
+Q: What is the continue statement?
+A: The continue statement skips the current iteration of a loop and continues with the next iteration.
+
+Q: What is the pass statement?
+A: The pass statement is a null statement that does nothing. It is used as a placeholder where code is required syntactically.
+
+Q: What is a function in Python?
+A: A function is a reusable block of code that performs a specific task. It is defined using the def keyword.
+
+Q: How do you define a function in Python?
+A: A function is defined using the def keyword followed by the function name, parentheses, and a colon.
+
+Q: What is the purpose of the return statement?
+A: The return statement ends a function and sends a value back to the calling code.
+
+Q: What are function arguments?
+A: Function arguments are values passed to a function when it is called. They provide input for the function.
+
+Q: What is the difference between parameters and arguments?
+A: Parameters are variables defined in a function declaration, while arguments are the actual values passed during the function call.
+
+Q: What are default arguments in Python?
+A: Default arguments are parameter values that are automatically used if no argument is provided during the function call.
+
+Q: What are keyword arguments?
+A: Keyword arguments are arguments passed using parameter names, making function calls more readable and flexible.
+
+Q: What are variable-length arguments (*args)?
+A: *args allows a function to accept any number of positional arguments, which are stored as a tuple.
+
+Q: What are keyword variable-length arguments (**kwargs)?
+A: **kwargs allows a function to accept any number of keyword arguments, which are stored as a dictionary.
+
+Q: What is a lambda function?
+A: A lambda function is a small anonymous function defined using the lambda keyword. It can contain only one expression.
+
+Q: What is recursion in Python?
+A: Recursion is a technique where a function calls itself repeatedly until a base condition is met.
+
+Q: What is the scope of a variable in Python?
+A: Variable scope determines where a variable can be accessed. Python has local, global, and nonlocal scopes.
+```text
+Q: What is a module in Python?
+A: A module is a Python file containing functions, classes, and variables that can be imported and reused in other Python programs.
+
+Q: What is a package in Python?
+A: A package is a collection of related Python modules organized in directories. It helps organize large projects.
+
+Q: How do you import a module in Python?
+A: A module is imported using the import statement, such as import math or from math import sqrt.
+
+Q: What is the difference between import and from...import?
+A: import imports the entire module, while from...import imports specific functions, classes, or variables from a module.
+
+Q: What is the __name__ variable in Python?
+A: The __name__ variable stores the name of the current module. If a file is run directly, its value is "__main__".
+
+Q: What is the purpose of the if __name__ == "__main__": statement?
+A: It ensures that a block of code executes only when the file is run directly, not when it is imported as a module.
+
+Q: What is exception handling in Python?
+A: Exception handling is the process of handling runtime errors using try, except, else, and finally blocks.
+
+Q: What is the try block?
+A: The try block contains code that may raise an exception during execution.
+
+Q: What is the except block?
+A: The except block catches and handles exceptions raised in the try block.
+
+Q: What is the finally block?
+A: The finally block contains code that always executes, regardless of whether an exception occurs.
+
+Q: What is the else block in exception handling?
+A: The else block executes only if no exception occurs in the try block.
+
+Q: What is the raise keyword in Python?
+A: The raise keyword is used to manually generate an exception.
+
+Q: What is a built-in exception in Python?
+A: Built-in exceptions are predefined error types such as ValueError, TypeError, IndexError, KeyError, and ZeroDivisionError.
+
+Q: What is file handling in Python?
+A: File handling is the process of creating, reading, writing, and updating files using Python.
+
+Q: How do you open a file in Python?
+A: A file is opened using the open() function with the filename and mode, such as open("data.txt", "r").
+
+Q: What are the different file modes in Python?
+A: Common file modes are:
+- r – Read
+- w – Write
+- a – Append
+- x – Create
+- rb – Read binary
+- wb – Write binary
+
+Q: How do you close a file in Python?
+A: A file is closed using the close() method after completing file operations.
+
+Q: What is the with statement in file handling?
+A: The with statement automatically closes a file after use, making file handling safer and easier.
+
+Q: What is Object-Oriented Programming (OOP)?
+A: Object-Oriented Programming is a programming paradigm based on classes and objects that improves code reusability and organization.
+
+Q: What is a class in Python?
+A: A class is a blueprint for creating objects. It defines the attributes and methods of an object.
+
+Q: What is an object in Python?
+A: An object is an instance of a class that contains data and methods defined by the class.
+
+Q: What is a constructor in Python?
+A: A constructor is a special method named __init__() that is automatically called when an object is created.
+
+Q: What is the self keyword in Python?
+A: self refers to the current instance of a class and is used to access instance variables and methods.
+
+Q: What is encapsulation in Python?
+A: Encapsulation is the process of combining data and methods into a single unit (class) and restricting direct access to data.
+
+Q: What is inheritance in Python?
+A: Inheritance allows one class to acquire the properties and methods of another class, promoting code reuse.
+```text
+Q: What is polymorphism in Python?
+A: Polymorphism allows the same method or function to behave differently for different objects. It is achieved through method overriding and duck typing.
+
+Q: What is method overriding in Python?
+A: Method overriding occurs when a child class provides its own implementation of a method already defined in the parent class.
+
+Q: What is method overloading in Python?
+A: Python does not support traditional method overloading. Similar behavior can be achieved using default arguments or variable-length arguments (*args and **kwargs).
+
+Q: What is abstraction in Python?
+A: Abstraction is the process of hiding implementation details and exposing only essential features. It is implemented using abstract classes and the abc module.
+
+Q: What is an abstract class in Python?
+A: An abstract class is a class that cannot be instantiated and may contain abstract methods that must be implemented by derived classes.
+
+Q: What is the ABC module?
+A: The abc (Abstract Base Class) module is used to create abstract classes and abstract methods in Python.
+
+Q: What is an iterator in Python?
+A: An iterator is an object that allows sequential traversal of elements using the __iter__() and __next__() methods.
+
+Q: What is an iterable in Python?
+A: An iterable is any object that can return an iterator, such as lists, tuples, strings, and dictionaries.
+
+Q: What is a generator in Python?
+A: A generator is a special type of iterator that generates values one at a time using the yield keyword.
+
+Q: What is the difference between return and yield?
+A: return ends the function and returns a value, whereas yield pauses the function and returns values one by one.
+
+Q: What is a decorator in Python?
+A: A decorator is a function that modifies or extends the behavior of another function without changing its code.
+
+Q: What is a recursive function?
+A: A recursive function is a function that calls itself until a base condition is met.
+
+Q: What is list comprehension?
+A: List comprehension is a concise way to create lists using a single line of code.
+
+Q: What is dictionary comprehension?
+A: Dictionary comprehension is a concise way to create dictionaries using a single expression.
+
+Q: What is set comprehension?
+A: Set comprehension is a concise way to create sets using a single expression.
+
+Q: What is a virtual environment in Python?
+A: A virtual environment is an isolated Python environment that allows different projects to have their own dependencies.
+
+Q: What is pip in Python?
+A: pip is Python's package manager used to install, update, and remove third-party libraries.
+
+Q: How do you install a Python package?
+A: A package is installed using the command:
+pip install package_name
+
+Q: What is the difference between local and global variables?
+A: Local variables are accessible only within the function where they are declared, while global variables are accessible throughout the program.
+
+Q: What is the global keyword in Python?
+A: The global keyword allows a function to modify a global variable instead of creating a local variable.
+
+Q: What is the nonlocal keyword in Python?
+A: The nonlocal keyword is used to modify a variable in the nearest enclosing scope that is not global.
+
+Q: What is PEP 8?
+A: PEP 8 is the official Python style guide that provides coding standards for writing clean and readable Python code.
+
+Q: What is duck typing in Python?
+A: Duck typing means an object's suitability is determined by its methods and attributes rather than its actual type.
+
+Q: What are mutable and immutable objects in Python?
+A: Mutable objects can be modified after creation (e.g., list, dictionary, set), while immutable objects cannot be modified (e.g., int, float, string, tuple).
+
+Q: What is the difference between deep copy and shallow copy?
+A: A shallow copy copies only the top-level object, while a deep copy creates independent copies of all nested objects.
+```text id="ptv9m2"
+Q: What is a Python library?
+A: A Python library is a collection of pre-written modules and functions that provide specific functionality, such as NumPy for numerical computing and Pandas for data analysis.
+
+Q: What is the difference between a module and a library?
+A: A module is a single Python file containing code, while a library is a collection of related modules.
+
+Q: What is NumPy?
+A: NumPy is a Python library used for numerical computing. It provides support for multidimensional arrays, mathematical functions, and high-performance operations.
+
+Q: What is Pandas?
+A: Pandas is a Python library used for data manipulation and analysis. It provides data structures such as Series and DataFrame.
+
+Q: What is a DataFrame in Pandas?
+A: A DataFrame is a two-dimensional, labeled data structure that stores data in rows and columns, similar to a table.
+
+Q: What is a Series in Pandas?
+A: A Series is a one-dimensional labeled array capable of holding data of any type.
+
+Q: What is the difference between append() and extend() in Python lists?
+A: append() adds a single element to the end of a list, whereas extend() adds all elements from another iterable.
+
+Q: What is the difference between remove() and pop() in Python lists?
+A: remove() deletes the first occurrence of a specified value, while pop() removes and returns an element by its index.
+
+Q: What is the difference between sort() and sorted()?
+A: sort() sorts a list in place, while sorted() returns a new sorted list without modifying the original list.
+
+Q: What is slicing in Python?
+A: Slicing is the process of extracting a portion of a sequence using the syntax sequence[start:stop:step].
+
+Q: What is indexing in Python?
+A: Indexing is used to access individual elements of a sequence using their position, starting from index 0.
+
+Q: What is negative indexing in Python?
+A: Negative indexing accesses elements from the end of a sequence. For example, -1 refers to the last element.
+
+Q: What is unpacking in Python?
+A: Unpacking assigns elements of a list, tuple, or other iterable to multiple variables in a single statement.
+
+Q: What is the zip() function?
+A: The zip() function combines two or more iterables into a single iterator of tuples.
+
+Q: What is the enumerate() function?
+A: The enumerate() function returns both the index and value while iterating over a sequence.
+
+Q: What is the map() function?
+A: The map() function applies a specified function to each element of an iterable and returns an iterator.
+
+Q: What is the filter() function?
+A: The filter() function returns an iterator containing elements that satisfy a given condition.
+
+Q: What is the reduce() function?
+A: The reduce() function repeatedly applies a function to the elements of an iterable and reduces them to a single value. It is available in the functools module.
+
+Q: What is the difference between is and == in Python?
+A: == compares the values of two objects, while is checks whether two variables refer to the same object in memory.
+
+Q: What is None in Python?
+A: None is a special constant that represents the absence of a value or a null value.
+
+Q: What is __init__() in Python?
+A: __init__() is a constructor method that is automatically called when an object of a class is created. It is used to initialize object attributes.
+
+Q: What is __str__() in Python?
+A: __str__() is a special method that returns a human-readable string representation of an object.
+
+Q: What is __repr__() in Python?
+A: __repr__() is a special method that returns the official string representation of an object, mainly used for debugging.
+
+Q: What is the difference between __str__() and __repr__()?
+A: __str__() provides a user-friendly representation of an object, while __repr__() provides a detailed representation intended for developers and debugging.
+
+Q: What are Python's built-in functions?
+A: Python provides many built-in functions such as print(), input(), len(), type(), id(), range(), sum(), max(), min(), abs(), round(), sorted(), open(), and help().

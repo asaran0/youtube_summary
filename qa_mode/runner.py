@@ -428,4 +428,14 @@ def _step(msg):
 def _safe_title(title, max_len=40):
     safe = re.sub(r"[^\w\s\-]", "", title)
     safe = re.sub(r"\s+", "_", safe.strip())
-    return safe[:max_len] or "interview_prep"
+
+    # Preserve _partN suffix — extract before truncating so it is never cut off
+    part_match = re.search(r'(_part\d+)$', safe, re.IGNORECASE)
+    if part_match:
+        suffix = part_match.group(1)           # e.g. "_part2"
+        base   = safe[: part_match.start()]    # everything before the suffix
+        safe   = base[: max(1, max_len - len(suffix))] + suffix
+    else:
+        safe = safe[:max_len]
+
+    return safe or "interview_prep"

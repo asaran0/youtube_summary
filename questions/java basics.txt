@@ -1,0 +1,36 @@
+Q: What is Java?
+A: Java is a high-level, object-oriented programming language developed by Sun Microsystems. It is designed to be platform-independent and follows the "Write Once, Run Anywhere" (WORA) principle.
+
+Q: Explain the main features of Java.
+A: Key features of Java include:
+- Object-oriented
+- Platform-independent (via the Java Virtual Machine)
+- Simple and easy to learn
+- Distributed computing support (via RMI and EJB)
+- Multi-threading
+- Robust and secure (garbage collection, exception handling, etc.)
+- Dynamic and extensible
+
+Q: What is the difference between == and .equals() in Java?
+A: == is used for comparing primitive data types or checking if two references point to the same object. .equals() is used for comparing the content or values of objects and is usually overridden in custom classes.
+
+Q: What is the Java Virtual Machine (JVM)?
+A: JVM is a virtual machine that enables Java applications to run on any device or operating system. It provides an abstraction layer between the Java program and the underlying hardware and operating system.
+
+Q: What is the difference between an abstract class and an interface?
+A: An abstract class can have both abstract and concrete methods, while an interface contains abstract methods (and default/static methods in modern Java). A class can extend only one abstract class but implement multiple interfaces. Abstract classes can have constructors, while interfaces cannot.
+
+Q: Explain the concept of multithreading in Java.
+A: Multithreading allows two or more threads to execute concurrently. Java supports multithreading through the Thread class and the Runnable interface.
+
+Q: What is the Java Collections Framework?
+A: The Java Collections Framework provides interfaces and classes for storing and manipulating groups of objects. It includes interfaces such as List, Set, and Map, and classes such as ArrayList, HashSet, and HashMap.
+
+Q: What is the difference between String, StringBuilder, and StringBuffer?
+A: String is immutable. StringBuilder and StringBuffer are mutable. StringBuilder is faster but not thread-safe, while StringBuffer is thread-safe.
+
+Q: What is the purpose of the finalize() method?
+A: The finalize() method is called by the garbage collector before an object is reclaimed. It allows cleanup operations such as releasing resources. (It is deprecated in modern Java.)
+
+Q: Explain the concept of exception handling in Java.
+A: Exception handling uses try, catch, and finally blocks. The try block contains code that may throw an exception, the catch block handles the exception, and the finally block executes whether an exception occurs or not.

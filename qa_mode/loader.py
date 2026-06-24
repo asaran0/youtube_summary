@@ -48,17 +48,25 @@ def _format_answer_display(text: str) -> str:
     - Preserve parenthetical content (shown on screen)
     - Insert a blank line (\\n\\n) after every sentence ending (. ? ! ।)
       so the answer reads as clean paragraphs, not one dense block.
+    - Bullet points (lines starting with - or •) each get their own line.
     """
     # Normalise whitespace first
     text = re.sub(r'\s+', ' ', text).strip()
 
-    # Insert newline after sentence-ending punctuation followed by a capital/Hindi
-    # Pattern: punctuation + space + (capital letter OR Hindi char)
+    # Handle bullet points: insert \n\n before each bullet marker (- or •)
+    # so they each appear on their own line
+    text = re.sub(r'\s*[-•]\s+', r'\n\n• ', text)
+
+    # Insert \n\n after sentence-ending punctuation followed by ANY next word
+    # (capital OR lowercase OR Hindi) — not just capitals
     text = re.sub(
-        r'([.?!।])\s+(?=[A-Z\u0900-\u097F])',
+        r'([.?!।])\s+(?=[A-Za-z\u0900-\u097F])',
         r'\1\n\n',
         text,
     )
+
+    # Clean up: remove leading/trailing blank lines
+    text = text.strip()
     return text
 
 

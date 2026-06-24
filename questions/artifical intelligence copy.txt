@@ -1,3 +1,4 @@
+```text
 Q: What is Artificial Intelligence (AI)?
 A: Artificial Intelligence (AI) is the branch of computer science that enables machines to perform tasks that normally require human intelligence, such as learning, reasoning, problem-solving, and decision-making.
 
@@ -177,3 +178,155 @@ A: Data preprocessing is the process of cleaning, transforming, and organizing r
 
 Q: What is data cleaning?
 A: Data cleaning is the process of removing incorrect, duplicate, or missing data to improve data quality.
+
+Q: What is missing data?
+A: Missing data refers to incomplete information in a dataset where one or more values are absent.
+
+Q: What is normalization?
+A: Normalization is the process of scaling numerical data to a common range, usually between 0 and 1, to improve model performance.
+
+Q: What is standardization?
+A: Standardization transforms data so that it has a mean of 0 and a standard deviation of 1, making features comparable.
+
+Q: What is model deployment?
+A: Model deployment is the process of making a trained AI model available for real-world use in applications or services.
+
+Q: What is inference in AI?
+A: Inference is the process of using a trained AI model to make predictions on new, unseen data.
+
+Q: What is transfer learning?
+A: Transfer learning is a technique where a pre-trained model is reused and fine-tuned for a different but related task.
+
+Q: What is OpenAI?
+A: OpenAI is an AI research and technology company that develops advanced AI models such as ChatGPT and GPT.
+
+Q: What is TensorFlow?
+A: TensorFlow is an open-source Machine Learning framework developed by Google for building and training AI models.
+
+Q: What is PyTorch?
+A: PyTorch is an open-source Deep Learning framework developed by Meta that is widely used for AI research and development.
+
+Q: What is Scikit-learn?
+A: Scikit-learn is a Python library that provides tools for Machine Learning, including classification, regression, clustering, and model evaluation.
+
+Q: What is AI ethics?
+A: AI ethics is the study of designing and using AI responsibly by ensuring fairness, transparency, privacy, and accountability.
+
+Q: What is bias in AI?
+A: AI bias occurs when an AI system produces unfair or inaccurate results due to biased training data or algorithms.
+
+Q: What is explainable AI (XAI)?
+A: Explainable AI (XAI) refers to AI systems whose decisions can be understood and explained by humans.
+
+Q: What are real-world applications of AI?
+A: AI is used in healthcare, finance, education, transportation, e-commerce, cybersecurity, manufacturing, customer service, and entertainment.
+
+Q: Why is Artificial Intelligence important?
+A: Artificial Intelligence improves efficiency, automates repetitive tasks, supports better decision-making, enhances customer experiences, and enables innovative solutions across many industries.
+```text id="ai100end"
+Q: What is the future of Artificial Intelligence?
+A: The future of AI includes advancements in healthcare, robotics, autonomous vehicles, education, cybersecurity, and intelligent automation, making AI an essential part of everyday life.
+
+Q: Can AI replace humans completely?
+A: No. AI can automate repetitive and data-driven tasks, but it cannot fully replace human creativity, emotions, ethics, and critical thinking.
+
+Q: What are the advantages of Artificial Intelligence?
+A: AI offers faster decision-making, automation, improved accuracy, 24/7 availability, reduced human error, and increased productivity.
+
+Q: What are the disadvantages of Artificial Intelligence?
+A: AI may lead to job displacement, high development costs, privacy concerns, bias in decision-making, and dependence on technology.
+
+Q: What is responsible AI?
+A: Responsible AI refers to developing and using AI systems in a fair, transparent, secure, ethical, and accountable manner.
+
+Q: What is AI automation?
+A: AI automation combines Artificial Intelligence with automation technologies to perform tasks with minimal human intervention.
+
+Q: What is robotics in AI?
+A: Robotics in AI involves designing intelligent robots that can perceive their environment, make decisions, and perform physical tasks.
+
+Q: What is an expert system?
+A: An expert system is an AI application that uses a knowledge base and inference rules to solve problems similar to a human expert.
+
+Q: What is a knowledge base in AI?
+A: A knowledge base is a collection of facts, rules, and information used by an AI system to make decisions and solve problems.
+
+Q: What is an inference engine?
+A: An inference engine is the component of an expert system that applies logical rules to the knowledge base to reach conclusions.
+
+Q: What is fuzzy logic?
+A: Fuzzy logic is an AI technique that allows reasoning with uncertain or approximate information instead of only true or false values.
+
+Q: What is computer perception?
+A: Computer perception enables AI systems to understand information from images, videos, audio, and sensors, similar to human senses.
+
+Q: What is autonomous AI?
+A: Autonomous AI refers to AI systems that can perform tasks and make decisions independently with minimal human intervention.
+
+Q: What is edge AI?
+A: Edge AI is the deployment of AI models on local devices such as smartphones, cameras, and IoT devices instead of relying on cloud servers.
+
+Q: What is cloud AI?
+A: Cloud AI refers to AI services and models hosted on cloud platforms that provide scalable computing power and storage.
+
+Q: What is an AI agent?
+A: An AI agent is a software system that observes its environment, makes decisions, and performs actions to achieve specific goals.
+
+Q: What is a smart assistant?
+A: A smart assistant is an AI-powered application that performs tasks and answers user queries using voice or text, such as Siri, Alexa, or Google Assistant.
+
+Q: What is recommendation system in AI?
+A: A recommendation system suggests products, movies, music, or other content based on user preferences and behavior.
+
+Q: What skills are required to learn Artificial Intelligence?
+A: Important skills include Python programming, mathematics, statistics, Machine Learning, Deep Learning, data analysis, and problem-solving.
+
+Q: Which programming language is most commonly used for AI?
+A: Python is the most widely used programming language for AI because of its simplicity and extensive AI libraries such as TensorFlow, PyTorch, and Scikit-learn.
+
+Q: What are some popular AI libraries in Python?
+A: Popular AI libraries include NumPy, Pandas, Scikit-learn, TensorFlow, PyTorch, Keras, OpenCV, and NLTK.
+
+Q: What is the difference between AI, Machine Learning, and Deep Learning?
+A: AI is the broad field of creating intelligent systems. Machine Learning is a subset of AI that enables systems to learn from data. Deep Learning is a subset of Machine Learning that uses neural networks with multiple layers.
+
+Q: How do you start learning Artificial Intelligence?
+A: Start by learning Python, mathematics, statistics, Machine Learning fundamentals, Deep Learning, and working on real-world AI projects.
+
+Q: What are common AI interview questions for freshers?
+A: Freshers are commonly asked about AI basics, Machine Learning types, supervised vs. unsupervised learning, neural networks, NLP, Computer Vision, overfitting, AI ethics, and real-world AI applications.
+
+Q: Why should you learn Artificial Intelligence?
+A: Learning AI opens career opportunities in data science, machine learning, robotics, healthcare, finance, cybersecurity, and many other industries. AI is one of the fastest-growing and most in-demand technologies worldwide.
+
+
+
+Introduction to AI
+History of AI
+Types of AI
+Machine Learning Basics
+Deep Learning
+Neural Networks
+Data Science Basics
+Supervised Learning
+Unsupervised Learning
+Reinforcement Learning
+Classification & Regression
+Clustering
+Feature Engineering
+Training & Testing Data
+Overfitting & Underfitting
+Bias & Variance
+Evaluation Metrics
+Natural Language Processing (NLP)
+Computer Vision
+Large Language Models (LLMs)
+Prompt Engineering
+AI Ethics
+Common AI Algorithms
+AI Applications
+AI Tools & Frameworks
+AI in Industry
+Responsible AI
+Future of AI
+Common AI Interview Questions
