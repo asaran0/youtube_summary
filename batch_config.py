@@ -23,13 +23,13 @@ QUESTIONS_PER_PART = 2
 
 # Base name used for output filenames and video titles.
 # e.g.  "java_basics"  →  java_basics_part1_qa.mp4, java_basics_part2_qa.mp4
-BATCH_TITLE = "Artificial intelligence Basic interview QA"
+BATCH_TITLE = "Java Basic interview QA"
 
 # ── Output ───────────────────────────────────────────────────────────────────
 
 # Where finished videos and metadata are written.
 # Overrides qa_mode/config.py OUTPUT_DIR for this batch run.
-OUTPUT_DIR = "output/qa/ai"
+OUTPUT_DIR = "output/qa/java"
 
 # ── Optional overrides (set to None to use qa_mode/config.py defaults) ───────
 
