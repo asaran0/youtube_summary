@@ -3,6 +3,7 @@ qa_mode/runner.py — Q&A / interview-prep mode pipeline.
 """
 
 import os
+import re
 import time
 
 from utils import (
@@ -19,6 +20,49 @@ from qa_mode.loader import load_qa_file
 from qa_mode.styles import resolve_style
 
 log = get_logger("qa.runner")
+
+
+# ── Paragraph-aware text helpers ──────────────────────────────────────────────
+
+def _build_display_tokens(text: str) -> list[tuple[str, bool]]:
+    """
+    Convert display_text (which contains \\n\\n paragraph breaks) into a
+    structured list of  (word, is_para_break_before)  tuples.
+
+    Example:
+        "Hello world.\\n\\nNew paragraph here."
+        → [("Hello", False), ("world.", False),
+           ("New", True),  ("paragraph", False), ("here.", False)]
+
+    This lets us slice the first N words for the word-reveal animation
+    while still knowing where paragraph boundaries fall.
+    """
+    tokens: list[tuple[str, bool]] = []
+    paragraphs = re.split(r'\n\n+', text)
+    for pi, para in enumerate(paragraphs):
+        para = para.strip()
+        if not para:
+            continue
+        words = para.split()
+        for wi, word in enumerate(words):
+            is_break = (pi > 0 and wi == 0)   # first word of a non-first paragraph
+            tokens.append((word, is_break))
+    return tokens
+
+
+def _tokens_to_text(tokens: list[tuple[str, bool]], n: int) -> str:
+    """
+    Reconstruct text from the first n tokens, re-inserting \\n\\n where
+    is_para_break_before is True.  Used to build visible_text for wrapping.
+    """
+    parts: list[str] = []
+    for word, is_break in tokens[:n]:
+        if is_break and parts:
+            parts.append("\n\n")
+        elif parts:
+            parts.append(" ")
+        parts.append(word)
+    return "".join(parts)
 
 
 def _build_qa_pairs(selected: list[dict]) -> list[dict]:
@@ -47,15 +91,21 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
                 # display_text: what screen shows (parens kept, paragraphs)
                 display_text = ans.get("display_text", spoken_text)
 
+                # display_tokens: list of (word, is_para_break_before)
+                # Preserves \n\n paragraph boundaries so the renderer can
+                # re-insert them even when slicing a partial visible window.
+                display_tokens = _build_display_tokens(display_text)
+
                 pairs.append({
-                    "question":      question_text,
-                    "display_text":  display_text,
-                    "spoken_words":  spoken_text.split(),   # drives highlight timing
-                    "display_words": display_text.split(),  # drives word reveal on screen
-                    "video_start":   q_start,
-                    "video_end":     a_end,
-                    "ans_start":     a_start,
-                    "ans_end":       a_end,
+                    "question":       question_text,
+                    "display_text":   display_text,
+                    "spoken_words":   spoken_text.split(),    # drives highlight timing
+                    "display_words":  display_text.split(),   # flat list — used for word count only
+                    "display_tokens": display_tokens,         # structured — used for rendering
+                    "video_start":    q_start,
+                    "video_end":      a_end,
+                    "ans_start":      a_start,
+                    "ans_end":        a_end,
                 })
                 i = j + 1
             else:
@@ -125,9 +175,10 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         all_display_lines = _wrap_paragraphs(pair["display_text"], font_a, text_w)
         entries.append({
             "q_lines":           _wrap_text_px(pair["question"], font_q, text_w),
-            "spoken_words":      pair["spoken_words"],   # for timing
-            "display_words":     pair["display_words"],  # for reveal (includes paren words)
-            "all_display_lines": all_display_lines,      # pre-wrapped with para marks
+            "spoken_words":      pair["spoken_words"],    # for timing
+            "display_words":     pair["display_words"],   # flat word list for counting
+            "display_tokens":    pair["display_tokens"],  # structured tokens for rendering
+            "all_display_lines": all_display_lines,       # pre-wrapped with para marks
             "v_start":           pair["video_start"],
             "v_end":             pair["video_end"],
             "a_start":           pair["ans_start"],
@@ -178,7 +229,8 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
 
         # Reveal display words up to and including active_display
         visible_n    = active_display + 1
-        visible_text = " ".join(entry["display_words"][:visible_n])
+        # Rebuild visible text from structured tokens — preserves \n\n breaks
+        visible_text = _tokens_to_text(entry["display_tokens"], visible_n)
 
         # Re-wrap with paragraph awareness
         vis_para_lines = _wrap_paragraphs(visible_text, font_a, text_w)
@@ -217,9 +269,8 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     return final_path
 
 
-# ── Paragraph-aware text helpers ──────────────────────────────────────────────
 
-def _wrap_paragraphs(text: str, font, max_width: int) -> list:
+
     """
     Wrap text into lines, treating \\n\\n as paragraph breaks.
     Returns a list where each item is either:
@@ -239,6 +290,26 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
             result.append(None)   # paragraph break marker
     return result
 
+
+def _wrap_paragraphs(text: str, font, max_width: int) -> list:
+    """
+    Wrap text into display lines, treating \n\n as hard paragraph breaks.
+    Returns a flat list of str lines with None inserted between paragraphs
+    as a separator marker. Consumers check `if item is None` to add
+    extra vertical spacing (paragraph gap).
+    """
+    from qa_mode.qa_slideshow import _wrap_text_px
+    result = []
+    paragraphs = re.split(r'\n\n+', text)
+    for pi, para in enumerate(paragraphs):
+        para = para.strip()
+        if not para:
+            continue
+        if pi > 0:
+            result.append(None)
+        lines = _wrap_text_px(para, font, max_width)
+        result.extend(lines)
+    return result or [""]
 
 def _paginate_paras(para_lines: list, max_lines: int) -> list[list]:
     """Paginate para_lines (strings + None markers) respecting max_lines."""
@@ -356,7 +427,7 @@ def _render_slide_paragraphs(
 
 # ── Pipeline entry point ──────────────────────────────────────────────────────
 
-import re   # needed by helpers above
+
 
 
 def run(qa_path: str, title: str = "interview_prep", cfg=default_cfg, keep_temp: bool = False) -> dict:
