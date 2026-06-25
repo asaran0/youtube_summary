@@ -37,9 +37,9 @@ OUTPUT_FPS = 30
 # "xtts"  clones your own voice from a sample WAV — best realism, offline.
 # "mms"   neural/offline after model download, one fixed voice.
 # "macos" configurable installed system voices, zero setup.
-TTS_BACKEND = "xtts"
+TTS_BACKEND = "kokoro"
 
-XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
+XTTS_VOICE_SAMPLE = "assets/clean_voice_story.wav"
 
 MACOS_TTS_VOICE = "Lekha"
 MACOS_TTS_VOICES = {
@@ -54,17 +54,18 @@ TTS_ANSWER_PAUSE_EXTRA = 0.0   # story mode has no Q&A pacing concept
 
 AUDIO_POST_PROCESSING = True
 AUDIO_FILTER = (
-    # Remove low rumble while keeping voice warmth (80Hz not 100Hz)
-    "highpass=f=80,"
-    # Allow full voice presence up to 14kHz
-    "lowpass=f=14000,"
-    # Slight presence boost at 3kHz for clarity, gentle cut at 7kHz for harshness
-    "equalizer=f=3000:width_type=o:width=2:g=1.5,"
-    "equalizer=f=7000:width_type=o:width=2:g=-2,"
-    # Gentle compressor — lower ratio and makeup to avoid pumping
-    "acompressor=threshold=-20dB:ratio=1.8:attack=20:release=300:makeup=1,"
-    # Louder target (-14 LUFS) with more dynamic range (LRA=12)
-    "loudnorm=I=-14:TP=-1:LRA=12"
+    # Remove subsonic rumble; 100Hz keeps XTTS Hindi voice warmth
+    "highpass=f=100,"
+    # Cap at 12kHz — XTTS Hindi doesn't add useful content above this
+    "lowpass=f=12000,"
+    # +2dB at 2kHz: sharpens Hindi consonant clarity (त, द, न, क etc.)
+    "equalizer=f=2000:width_type=o:width=2:g=2.0,"
+    # -2.5dB at 6kHz: tames sibilance harshness common in XTTS Hindi
+    "equalizer=f=6000:width_type=o:width=2:g=-2.5,"
+    # Light compressor — XTTS already has decent dynamics; just even it out
+    "acompressor=threshold=-18dB:ratio=2.0:attack=15:release=250:makeup=1.5,"
+    # -14 LUFS target: standard for YouTube narration
+    "loudnorm=I=-14:TP=-1:LRA=11"
 )
 
 MMS_TTS_MODEL_IDS = {

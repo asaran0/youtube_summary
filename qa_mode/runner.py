@@ -65,12 +65,13 @@ def _tokens_to_text(tokens: list[tuple[str, bool]], n: int) -> str:
     return "".join(parts)
 
 
-def _build_qa_pairs(selected: list[dict]) -> list[dict]:
+def _build_qa_pairs(selected: list[dict], cfg=None) -> list[dict]:
     """
     Collapse flat segments into one dict per Q/A pair.
     spoken_words  — words from TTS text (parens stripped) — drives timing/highlight
     display_text  — full text including parens, with paragraph line breaks
     """
+    cfg_ref = [cfg]  # mutable ref so inner scope can read it
     pairs = []
     i = 0
     while i < len(selected):
@@ -96,6 +97,10 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
                 # re-insert them even when slicing a partial visible window.
                 display_tokens = _build_display_tokens(display_text)
 
+                # POST_ANSWER_HOLD: extra seconds to hold final answer on screen
+                # (configured via QA_POST_ANSWER_HOLD in config.py)
+                hold = float(getattr(cfg_ref[0], "QA_POST_ANSWER_HOLD", 1.0))
+
                 pairs.append({
                     "question":       question_text,
                     "display_text":   display_text,
@@ -103,7 +108,7 @@ def _build_qa_pairs(selected: list[dict]) -> list[dict]:
                     "display_words":  display_text.split(),   # flat list — used for word count only
                     "display_tokens": display_tokens,         # structured — used for rendering
                     "video_start":    q_start,
-                    "video_end":      a_end,
+                    "video_end":      a_end + hold,           # hold full answer on screen
                     "ans_start":      a_start,
                     "ans_end":        a_end,
                 })
@@ -123,7 +128,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     from moviepy import AudioFileClip, VideoClip
     import numpy as np
 
-    qa_pairs = _build_qa_pairs(selected)
+    qa_pairs = _build_qa_pairs(selected, cfg)
     if not qa_pairs:
         raise RuntimeError("No Q/A pairs found in selected segments")
 
@@ -164,9 +169,54 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     font_q, font_a = _load_fonts(font_path, cfg)
     text_w      = target_w - 2 * margin_side
     a_line_h    = _line_height(font_a)
-    para_gap    = int(a_line_h * 0.6)   # extra gap between paragraphs
+    para_gap    = int(a_line_h * 0.6)
     avail_a_h   = a_band_h - margin_top_a - margin_bot_a
     max_a_lines = max(1, avail_a_h // (a_line_h + 4))
+
+    # ── Feature: load new config values ──────────────────────────────────
+    from PIL import ImageFont as _PILFont
+
+    use_progress    = getattr(cfg, "QA_PROGRESS_BAR",       True)
+    prog_bar_h      = getattr(cfg, "QA_PROGRESS_BAR_HEIGHT", 8)
+    prog_bar_color  = _parse_color(getattr(cfg, "QA_PROGRESS_BAR_COLOR", (245, 200, 66)))
+    prog_bar_bg     = _parse_color(getattr(cfg, "QA_PROGRESS_BAR_BG",    (80, 80, 80)))
+
+    use_badge       = getattr(cfg, "QA_QUESTION_BADGE",      True)
+    badge_text_col  = _parse_color(getattr(cfg, "QA_BADGE_TEXT_COLOR",   (255, 255, 255)))
+    badge_padding   = getattr(cfg, "QA_BADGE_PADDING",       18)
+    badge_margin    = getattr(cfg, "QA_BADGE_MARGIN",        20)
+    _badge_fs       = getattr(cfg, "QA_BADGE_FONT_SIZE",     36)
+
+    use_divider     = getattr(cfg, "QA_DIVIDER",             True)
+    divider_color   = _parse_color(getattr(cfg, "QA_DIVIDER_COLOR",  (255, 255, 255)))
+    divider_h       = getattr(cfg, "QA_DIVIDER_HEIGHT",      4)
+    divider_alpha   = getattr(cfg, "QA_DIVIDER_ALPHA",       80)
+
+    sentence_reveal = getattr(cfg, "QA_SENTENCE_REVEAL",     True)
+    fade_dur        = getattr(cfg, "QA_FADE_DURATION",       0.35)
+
+    use_watermark   = getattr(cfg, "QA_WATERMARK",           True)
+    watermark_text  = getattr(cfg, "QA_WATERMARK_TEXT",      "@ai.interview.guru1") if use_watermark else None
+    watermark_col   = _parse_color(getattr(cfg, "QA_WATERMARK_COLOR", (255, 255, 255)))
+    watermark_alpha = getattr(cfg, "QA_WATERMARK_ALPHA",     90)
+    _wm_fs          = getattr(cfg, "QA_WATERMARK_FONT_SIZE", 32)
+
+    # Load badge + watermark fonts (reuse same font file as answer font)
+    from qa_mode.qa_slideshow import _load_fonts as _lf2
+    _badge_font = _load_fonts(font_path, type("_C", (), {"LANGUAGE": getattr(cfg,"LANGUAGE","en"),
+        "QA_SLIDE_QUESTION_FONT_SIZE": _badge_fs,
+        "QA_SLIDE_ANSWER_FONT_SIZE":   _badge_fs,
+        "FALLBACK_FONT_SEARCH_PATHS":  getattr(cfg,"FALLBACK_FONT_SEARCH_PATHS",[]),
+        "HINDI_FONT_SEARCH_PATHS":     getattr(cfg,"HINDI_FONT_SEARCH_PATHS",[]),
+    })())[1]
+    _wm_font = _load_fonts(font_path, type("_C", (), {"LANGUAGE": getattr(cfg,"LANGUAGE","en"),
+        "QA_SLIDE_QUESTION_FONT_SIZE": _wm_fs,
+        "QA_SLIDE_ANSWER_FONT_SIZE":   _wm_fs,
+        "FALLBACK_FONT_SEARCH_PATHS":  getattr(cfg,"FALLBACK_FONT_SEARCH_PATHS",[]),
+        "HINDI_FONT_SEARCH_PATHS":     getattr(cfg,"HINDI_FONT_SEARCH_PATHS",[]),
+    })())[1]
+
+    total_pairs = len(qa_pairs)
 
     # Pre-compute per-pair entry data
     entries = []
@@ -185,81 +235,168 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
             "a_end":             pair["ans_end"],
         })
 
-    total_dur = min(entries[-1]["v_end"], audio_dur)
+    # total_dur: the video runs for exactly as long as the audio.
+    # v_end values already include the post-answer hold; we clamp to audio
+    # duration so subclipped() never receives an end_time > clip duration.
+    post_hold = float(getattr(cfg, "QA_POST_ANSWER_HOLD", 1.0))
+    total_dur = min(max(audio_dur, entries[-1]["v_end"]), audio_dur)
+
+    def _get_fade_alpha(t, entry, entry_idx):
+        """
+        Return fade alpha 0-255. 255=fully visible, 0=black.
+        Fade in at the very start of each Q slide.
+        Fade out only at the END of the hold (= transition to next Q).
+        Never fade during answer playback — no blink mid-answer.
+        """
+        if fade_dur <= 0:
+            return 255
+        # Fade IN: first fade_dur seconds of this question's slide
+        since_start = t - entry["v_start"]
+        if since_start < fade_dur:
+            return int(255 * since_start / fade_dur)
+        # Fade OUT: only during the final fade_dur of the HOLD period
+        # (i.e. right before the next question appears)
+        hold = float(getattr(cfg, "QA_POST_ANSWER_HOLD", 1.0))
+        fade_out_start = entry["v_end"] - min(fade_dur, hold * 0.8)
+        if t >= fade_out_start:
+            time_left = entry["v_end"] - t
+            return int(255 * max(0.0, time_left / fade_dur))
+        return 255
+
+    def _get_sentence_visible_n(progress, tokens):
+        """
+        Sentence-by-sentence reveal: reveal all words up to end of the
+        sentence that corresponds to current progress fraction.
+        A sentence ends when a token ends with . ? ! or contains \n\n boundary.
+        """
+        total = len(tokens)
+        if total == 0:
+            return 0
+        target_word = int(progress * total)
+        # Walk forward to end of current sentence
+        sentence_enders = {'.', '?', '!', '।'}
+        for i in range(target_word, total):
+            word, _ = tokens[i]
+            clean_word = word.rstrip().rstrip('.!?,')  
+            if any(clean_word.endswith(e) for e in sentence_enders):
+                return i + 1
+            # also break at paragraph boundaries
+            if i + 1 < total and tokens[i + 1][1]:   # next token is para start
+                return i + 1
+        return total
 
     def make_frame(t):
-        entry = None
-        for e in entries:
+        # Find which entry owns time t.
+        # v_end now includes the post-answer hold so there are no gaps
+        # between pairs — but guard with fallback to last entry anyway.
+        entry     = None
+        entry_idx = 0
+        for idx, e in enumerate(entries):
             if e["v_start"] <= t < e["v_end"]:
-                entry = e
+                entry     = e
+                entry_idx = idx
                 break
         if entry is None:
-            entry = entries[-1]
+            # t is past all v_end (tail of last hold) — keep showing last answer
+            entry     = entries[-1]
+            entry_idx = len(entries) - 1
 
-        if t < entry["a_start"]:
-            # Question phase — blank answer band
-            img = _render_slide_paragraphs(
-                video_width=target_w, video_height=target_h,
-                q_band_h=q_band_h, a_band_h=a_band_h,
-                q_bg=q_bg, a_bg=a_bg,
-                q_lines=entry["q_lines"], para_lines=[],
-                font_q=font_q, font_a=font_a,
-                q_color=q_color, a_color=a_color,
-                margin_side=margin_side,
-                margin_top_q=margin_top_q, margin_top_a=margin_top_a,
-                para_gap=para_gap, max_lines=max_a_lines,
-                active_word=-1, highlight_color=hi_color,
-            )
-            return np.array(img)
+        # ── Progress bar fraction: (completed questions + current answer progress)
+        if use_progress:
+            if t < entry["a_start"]:
+                prog_frac = entry_idx / total_pairs
+            else:
+                ans_dur   = max(entry["a_end"] - entry["a_start"], 0.001)
+                ans_prog  = (t - entry["a_start"]) / ans_dur
+                prog_frac = (entry_idx + ans_prog) / total_pairs
+        else:
+            prog_frac = None
 
-        # Answer phase ─────────────────────────────────────────────────
-        ans_dur = max(entry["a_end"] - entry["a_start"], 0.001)
-        progress = (t - entry["a_start"]) / ans_dur
+        # ── Badge text
+        badge_str = f"Q {entry_idx + 1} / {total_pairs}" if use_badge else None
 
-        # active_word: index into SPOKEN words (drives timing/highlight)
-        spoken_total  = len(entry["spoken_words"])
-        active_spoken = min(int(progress * spoken_total), spoken_total - 1)
+        # ── Fade alpha
+        fa = _get_fade_alpha(t, entry, entry_idx)
 
-        # Map spoken word index → display word index
-        # spoken words are a subset of display words (parens stripped).
-        # We find the Nth spoken word's position in the display word list.
-        active_display = _spoken_to_display_idx(
-            active_spoken, entry["spoken_words"], entry["display_words"]
-        )
-
-        # Reveal display words up to and including active_display
-        visible_n    = active_display + 1
-        # Rebuild visible text from structured tokens — preserves \n\n breaks
-        visible_text = _tokens_to_text(entry["display_tokens"], visible_n)
-
-        # Re-wrap with paragraph awareness
-        vis_para_lines = _wrap_paragraphs(visible_text, font_a, text_w)
-        pages = _paginate_paras(vis_para_lines, max_a_lines)
-        cur_page = pages[-1] if pages else []
-
-        # Compute active word index within current page
-        words_before_page = sum(
-            _count_para_words(pages[pi]) for pi in range(len(pages) - 1)
-        )
-        page_active = active_display - words_before_page
-
-        img = _render_slide_paragraphs(
+        # ── Common render kwargs
+        common = dict(
             video_width=target_w, video_height=target_h,
             q_band_h=q_band_h, a_band_h=a_band_h,
             q_bg=q_bg, a_bg=a_bg,
-            q_lines=entry["q_lines"], para_lines=cur_page,
             font_q=font_q, font_a=font_a,
             q_color=q_color, a_color=a_color,
             margin_side=margin_side,
             margin_top_q=margin_top_q, margin_top_a=margin_top_a,
             para_gap=para_gap, max_lines=max_a_lines,
-            active_word=page_active, highlight_color=hi_color,
+            highlight_color=hi_color,
+            progress_frac=prog_frac,
+            progress_bar_h=prog_bar_h,
+            progress_bar_color=prog_bar_color,
+            progress_bar_bg=prog_bar_bg,
+            badge_text=badge_str,
+            badge_font=_badge_font,
+            badge_text_color=badge_text_col,
+            badge_padding=badge_padding,
+            badge_margin=badge_margin,
+            divider=use_divider,
+            divider_color=divider_color,
+            divider_height=divider_h,
+            divider_alpha=divider_alpha,
+            watermark_text=watermark_text,
+            watermark_font=_wm_font,
+            watermark_color=watermark_col,
+            watermark_alpha=watermark_alpha,
+            fade_alpha=fa,
+        )
+
+        if t < entry["a_start"]:
+            # ── Question phase — blank answer band
+            img = _render_slide_paragraphs(
+                q_lines=entry["q_lines"], para_lines=[],
+                active_word=-1, **common,
+            )
+            return np.array(img)
+
+        # ── Answer phase ───────────────────────────────────────────────────
+        is_hold = t >= entry["a_end"]   # post-answer hold: show full answer, no highlight
+        ans_dur       = max(entry["a_end"] - entry["a_start"], 0.001)
+        progress      = min((t - entry["a_start"]) / ans_dur, 1.0)
+        spoken_total  = len(entry["spoken_words"])
+        active_spoken = min(int(progress * spoken_total), spoken_total - 1)
+        active_display = _spoken_to_display_idx(
+            active_spoken, entry["spoken_words"], entry["display_words"]
+        )
+
+        # During hold: show all words, no highlight
+        if is_hold:
+            visible_n = len(entry["display_tokens"])
+        elif sentence_reveal:
+            visible_n = _get_sentence_visible_n(progress, entry["display_tokens"])
+        else:
+            visible_n = active_display + 1
+
+        visible_text   = _tokens_to_text(entry["display_tokens"], visible_n)
+        vis_para_lines = _wrap_paragraphs(visible_text, font_a, text_w)
+        pages          = _paginate_paras(vis_para_lines, max_a_lines)
+        cur_page       = pages[-1] if pages else []
+
+        words_before_page = sum(
+            _count_para_words(pages[pi]) for pi in range(len(pages) - 1)
+        )
+        page_active = -1 if is_hold else (active_display - words_before_page)
+
+        img = _render_slide_paragraphs(
+            q_lines=entry["q_lines"], para_lines=cur_page,
+            active_word=page_active, **common,
         )
         return np.array(img)
 
     audio_clip = AudioFileClip(tts_audio_path)
-    video_clip = VideoClip(make_frame, duration=total_dur)
-    final_clip = video_clip.with_audio(audio_clip.subclipped(0, total_dur))
+    # Hard clamp: never ask subclipped() for more than the clip has.
+    # Floating-point timing accumulation can push total_dur 1-2 frames over.
+    safe_dur   = min(total_dur, audio_clip.duration)
+    video_clip = VideoClip(make_frame, duration=safe_dur)
+    final_clip = video_clip.with_audio(audio_clip.subclipped(0, safe_dur))
     final_clip.write_videofile(
         final_path, fps=cfg.OUTPUT_FPS,
         codec=cfg.VIDEO_CODEC, audio_codec=cfg.AUDIO_CODEC,
@@ -268,27 +405,6 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     )
     return final_path
 
-
-
-
-    """
-    Wrap text into lines, treating \\n\\n as paragraph breaks.
-    Returns a list where each item is either:
-      - a string (a line of text)
-      - None   (paragraph separator — renders as extra vertical gap)
-    """
-    from qa_mode.qa_slideshow import _wrap_text_px
-    result = []
-    paragraphs = re.split(r'\n\n+', text)
-    for pi, para in enumerate(paragraphs):
-        para = para.strip()
-        if not para:
-            continue
-        lines = _wrap_text_px(para, font, max_width)
-        result.extend(lines)
-        if pi < len(paragraphs) - 1:
-            result.append(None)   # paragraph break marker
-    return result
 
 
 def _wrap_paragraphs(text: str, font, max_width: int) -> list:
@@ -379,6 +495,25 @@ def _render_slide_paragraphs(
     para_gap, max_lines,
     active_word=-1,
     highlight_color=(220, 120, 0),
+    # ── New feature params (all optional / backward-compatible) ──
+    progress_frac=None,       # 0.0-1.0; None = no bar
+    progress_bar_h=8,
+    progress_bar_color=(245, 200, 66),
+    progress_bar_bg=(80, 80, 80),
+    badge_text=None,          # e.g. "Q 3 / 10"; None = no badge
+    badge_font=None,
+    badge_text_color=(255, 255, 255),
+    badge_padding=18,
+    badge_margin=20,
+    divider=False,
+    divider_color=(255, 255, 255),
+    divider_height=4,
+    divider_alpha=80,
+    watermark_text=None,      # None = no watermark
+    watermark_font=None,
+    watermark_color=(255, 255, 255),
+    watermark_alpha=90,
+    fade_alpha=255,           # 255 = fully opaque (no fade); 0 = black
 ):
     from qa_mode.qa_slideshow import _line_height, _text_width, _text_tokens, _parse_color
     from PIL import Image, ImageDraw
@@ -389,10 +524,22 @@ def _render_slide_paragraphs(
     draw.rectangle([0, 0, video_width, q_band_h], fill=q_bg)
     draw.rectangle([0, q_band_h, video_width, video_height], fill=a_bg)
 
+    # ── 3. Divider line between bands ────────────────────────────────────
+    if divider and divider_height > 0:
+        dc = tuple(list(divider_color[:3]))
+        # Blend divider colour over the band colours for opacity effect
+        alpha = divider_alpha / 255.0
+        blended = tuple(int(dc[i] * alpha + q_bg[i] * (1 - alpha)) for i in range(3))
+        dy = q_band_h - divider_height // 2
+        draw.rectangle([0, dy, video_width, dy + divider_height], fill=blended)
+
     # ── Question — vertically centred in top band ─────────────────────────
     q_lh      = _line_height(font_q)
+    # Reserve space for badge and progress bar when centring question text
+    top_reserve = progress_bar_h if progress_frac is not None else 0
     total_q_h = len(q_lines) * q_lh + max(0, len(q_lines) - 1) * 8
-    y = max((q_band_h - total_q_h) // 2, margin_top_q)
+    usable_q  = q_band_h - top_reserve
+    y = top_reserve + max((usable_q - total_q_h) // 2, margin_top_q)
     for line in q_lines:
         tw = _text_width(draw, line, font_q)
         x  = (video_width - tw) // 2
@@ -407,7 +554,6 @@ def _render_slide_paragraphs(
 
     for item in para_lines:
         if item is None:
-            # Paragraph break — extra vertical gap
             y += para_gap
             continue
         line = item
@@ -421,6 +567,56 @@ def _render_slide_paragraphs(
             if is_word:
                 word_index += 1
         y += a_lh + 4
+
+    # ── 1. Progress bar — drawn after content so it sits on top ──────────
+    if progress_frac is not None and progress_bar_h > 0:
+        draw.rectangle([0, 0, video_width, progress_bar_h], fill=progress_bar_bg)
+        filled_w = int(video_width * max(0.0, min(1.0, progress_frac)))
+        if filled_w > 0:
+            draw.rectangle([0, 0, filled_w, progress_bar_h], fill=progress_bar_color)
+
+    # ── 2. Question number badge — pill in top-right of question band ─────
+    if badge_text and badge_font:
+        bw = _text_width(draw, badge_text, badge_font)
+        bh = _line_height(badge_font)
+        pad_x, pad_y = badge_padding, badge_padding // 2
+        pill_w = bw + 2 * pad_x
+        pill_h = bh + 2 * pad_y
+        bx = video_width - pill_w - badge_margin
+        by = (progress_bar_h if progress_frac is not None else 0) + badge_margin
+        # Semi-transparent dark pill
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        odraw   = ImageDraw.Draw(overlay)
+        odraw.rounded_rectangle(
+            [bx, by, bx + pill_w, by + pill_h],
+            radius=pill_h // 2,
+            fill=(0, 0, 0, 120),
+        )
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        draw.text((bx + pad_x, by + pad_y), badge_text,
+                  font=badge_font, fill=badge_text_color)
+
+    # ── 6. Watermark ──────────────────────────────────────────────────────
+    if watermark_text and watermark_font:
+        ww = _text_width(draw, watermark_text, watermark_font)
+        wh = _line_height(watermark_font)
+        wx = video_width - ww - margin_side
+        wy = video_height - wh - (margin_side // 2)
+        alpha = watermark_alpha / 255.0
+        wc = tuple(int(watermark_color[i] * alpha + a_bg[i] * (1 - alpha))
+                   for i in range(3))
+        draw.text((wx, wy), watermark_text, font=watermark_font, fill=wc)
+
+    # ── 5. Fade overlay (black) — applied last ────────────────────────────
+    if fade_alpha < 255:
+        fade_alpha = max(0, min(255, int(fade_alpha)))
+        if fade_alpha > 0:
+            overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+            odraw   = ImageDraw.Draw(overlay)
+            odraw.rectangle([0, 0, video_width, video_height],
+                            fill=(0, 0, 0, 255 - fade_alpha))
+            img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
     return img
 

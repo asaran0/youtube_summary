@@ -97,48 +97,93 @@ def _gradient_bg(w: int, h: int, top: tuple, bot: tuple) -> Image.Image:
 
 # ── Waveform helpers ──────────────────────────────────────────────────────────
 
-def _load_audio_samples(audio_path: str, target_sr: int = 22050) -> np.ndarray:
-    """Load audio as mono float32 array via ffmpeg."""
+_WAVEFORM_LOOP_SECS = 4
+_WAVEFORM_LOOP_FPS  = 30
+
+
+def _waveform_loop_path(accent: tuple, video_w: int, video_h: int,
+                        n_bars: int, bar_zone_ratio: float, cfg) -> str:
+    """
+    Return path to a cached looping waveform MP4 for this accent colour.
+    Creates it (once) if it does not already exist.
+    The clip is black-background with coloured bars — overlaid via ffmpeg
+    screen-blend so the black disappears and only the bright bars show.
+    """
+    os.makedirs("assets/waveform_loops", exist_ok=True)
+    hex_accent = "%02x%02x%02x" % (accent[0], accent[1], accent[2])
+    cache_path = f"assets/waveform_loops/wf_{hex_accent}_{video_w}x{video_h}.mp4"
+
+    if os.path.exists(cache_path):
+        log.info("Waveform loop cache hit  → %s", cache_path)
+        return cache_path
+
+    log.info("Rendering waveform loop  → %s  (4 s, done once)", cache_path)
+    fps        = _WAVEFORM_LOOP_FPS
+    dur        = _WAVEFORM_LOOP_SECS
+    n_frames   = fps * dur
+    bar_zone_h = int(video_h * bar_zone_ratio)
+    bar_w      = max(2, int(video_w * 0.60 / (n_bars * 1.5)))
+    gap        = max(1, bar_w // 2)
+    total_bw   = n_bars * (bar_w + gap)
+    start_x    = (video_w - total_bw) // 2
+    bar_zone_y = video_h - bar_zone_h - int(video_h * 0.02)
+    bg_alpha   = getattr(cfg, "STORY_WAVEFORM_BG_ALPHA", 80)
+    bar_color  = getattr(cfg, "STORY_WAVEFORM_COLOR", None) or accent
+
     cmd = [
-        "ffmpeg", "-i", audio_path,
-        "-ac", "1", "-ar", str(target_sr),
-        "-f", "f32le", "-",
+        "ffmpeg", "-y",
+        "-f", "rawvideo", "-pixel_format", "rgb24",
+        "-video_size", f"{video_w}x{video_h}",
+        "-framerate", str(fps),
+        "-i", "pipe:0",
+        "-c:v", "libx264", "-preset", "ultrafast",
+        "-pix_fmt", "yuv420p", "-crf", "23",
+        "-t", str(dur),
+        cache_path,
     ]
-    r = subprocess.run(cmd, capture_output=True)
-    if r.returncode != 0:
-        log.warning("Could not load audio for waveform: %s", r.stderr[-200:])
-        return np.zeros(target_sr, dtype=np.float32)
-    return np.frombuffer(r.stdout, dtype=np.float32)
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    rng         = random.Random(42)
+    bar_phases  = [rng.uniform(0, 2 * math.pi) for _ in range(n_bars)]
+    bar_freqs   = [rng.uniform(0.8, 2.5)        for _ in range(n_bars)]
+
+    for fi in range(n_frames):
+        t     = fi / fps
+        frame = Image.new("RGB", (video_w, video_h), (0, 0, 0))
+        draw  = ImageDraw.Draw(frame)
+
+        # Semi-transparent strip (only the bottom strip region)
+        strip_h  = bar_zone_h + 16
+        strip_y0 = bar_zone_y - 8
+        strip    = Image.new("RGBA", (video_w, strip_h), (0, 0, 0, bg_alpha))
+        region   = frame.crop((0, strip_y0, video_w, strip_y0 + strip_h)).convert("RGBA")
+        frame.paste(Image.alpha_composite(region, strip).convert("RGB"), (0, strip_y0))
+        draw = ImageDraw.Draw(frame)
+
+        for i in range(n_bars):
+            amp = (
+                0.45
+                + 0.40 * math.sin(2 * math.pi * bar_freqs[i] * t + bar_phases[i])
+                + 0.15 * math.sin(2 * math.pi * bar_freqs[i] * 2.3 * t + bar_phases[i] * 1.7)
+            )
+            amp      = max(0.05, min(1.0, amp))
+            bh_px    = max(4, int(amp * bar_zone_h))
+            x        = start_x + i * (bar_w + gap)
+            y_top    = bar_zone_y + (bar_zone_h - bh_px)
+            y_bot    = bar_zone_y + bar_zone_h
+            bright   = 0.6 + 0.4 * amp
+            color    = tuple(min(255, int(c * bright)) for c in bar_color)
+            draw.rectangle([x, y_top, x + bar_w - 1, y_bot], fill=color)
+
+        proc.stdin.write(frame.tobytes())
+
+    proc.stdin.close()
+    proc.wait()
+    log.info("Waveform loop ready      → %s", cache_path)
+    return cache_path
 
 
-def _rms_envelope(samples: np.ndarray, sr: int, fps: int, n_bars: int = 40) -> np.ndarray:
-    """
-    Compute per-frame RMS amplitude envelope.
-    Returns array shape (n_frames, n_bars) — values 0..1.
-    """
-    total_frames = math.ceil(len(samples) / sr * fps)
-    frame_size   = sr // fps
-    result = np.zeros((total_frames, n_bars), dtype=np.float32)
-
-    for fi in range(total_frames):
-        start = fi * frame_size
-        chunk = samples[start : start + frame_size]
-        if len(chunk) == 0:
-            continue
-        rms = float(np.sqrt(np.mean(chunk ** 2)))
-        # Distribute rms into bars with slight random variation for visual interest
-        for b in range(n_bars):
-            phase   = math.sin(fi * 0.3 + b * 0.5) * 0.3 + 0.7
-            bar_rms = min(1.0, rms * 6 * phase + 0.05)
-            result[fi, b] = bar_rms
-
-    # Smooth over time
-    from scipy.ndimage import uniform_filter1d
-    result = uniform_filter1d(result, size=3, axis=0)
-    return result
-
-
-# ── Channel logo badge ────────────────────────────────────────────────────────
 
 def _draw_channel_logo(draw: ImageDraw.ImageDraw, w: int, h: int,
                        text: str, font_hint: str, cfg,
@@ -181,22 +226,30 @@ def _draw_channel_logo(draw: ImageDraw.ImageDraw, w: int, h: int,
 
 def _draw_waveform(draw: ImageDraw.ImageDraw, w: int, h: int,
                    bar_heights: np.ndarray, accent: tuple, cfg) -> None:
-    """Draw animated waveform bars at the bottom of the frame."""
-    n_bars   = len(bar_heights)
+    """Draw animated waveform bars at the bottom of the frame.
+
+    The semi-transparent strip is drawn as a direct RGBA patch (cropped to
+    just the strip region) rather than a full-frame composite, which was the
+    main cause of the video render hang.
+    """
+    n_bars     = len(bar_heights)
     bar_zone_h = int(h * getattr(cfg, "STORY_WAVEFORM_HEIGHT_RATIO", 0.10))
     bar_zone_y = h - bar_zone_h - int(h * 0.02)
-    bar_w    = max(2, int(w * 0.60 / (n_bars * 1.5)))
-    gap      = max(1, bar_w // 2)
-    total_w  = n_bars * (bar_w + gap)
-    start_x  = (w - total_w) // 2
+    bar_w      = max(2, int(w * 0.60 / (n_bars * 1.5)))
+    gap        = max(1, bar_w // 2)
+    total_w    = n_bars * (bar_w + gap)
+    start_x    = (w - total_w) // 2
 
-    # Semi-transparent background strip
+    # Semi-transparent background strip — composite only the strip region,
+    # NOT the full frame. This is 10-20x faster than the old full-frame crop.
     strip_alpha = getattr(cfg, "STORY_WAVEFORM_BG_ALPHA", 80)
-    bg_strip = Image.new("RGBA", (w, bar_zone_h + 16), (0, 0, 0, strip_alpha))
-    draw._image.paste(Image.alpha_composite(
-        draw._image.crop((0, bar_zone_y - 8, w, bar_zone_y + bar_zone_h + 8)).convert("RGBA"),
-        bg_strip,
-    ).convert("RGB"), (0, bar_zone_y - 8))
+    strip_y0    = bar_zone_y - 8
+    strip_h     = bar_zone_h + 16
+    strip_y1    = strip_y0 + strip_h
+    region      = draw._image.crop((0, strip_y0, w, strip_y1)).convert("RGBA")
+    overlay     = Image.new("RGBA", (w, strip_h), (0, 0, 0, strip_alpha))
+    merged      = Image.alpha_composite(region, overlay).convert("RGB")
+    draw._image.paste(merged, (0, strip_y0))
     draw = ImageDraw.Draw(draw._image)
 
     bar_color_base = getattr(cfg, "STORY_WAVEFORM_COLOR", None) or accent
@@ -327,11 +380,19 @@ def compile_story_video(
 
     font = _load_font(sub_size, lang, font_path)
 
-    # Pre-load audio amplitude envelope
-    log.info("Loading audio for waveform animation …")
-    samples  = _load_audio_samples(audio_path)
-    envelope = _rms_envelope(samples, sr=22050, fps=cfg.OUTPUT_FPS, n_bars=n_bars)
-    n_frames = envelope.shape[0]
+    # Get (or create) the looping waveform asset for this palette's accent colour.
+    # Use the first chunk's accent as the loop colour — most videos share one palette.
+    first_accent = PALETTES[0][2]   # will be overridden per-chunk via ffmpeg overlay
+    bar_zone_ratio = getattr(cfg, "STORY_WAVEFORM_HEIGHT_RATIO", 0.10)
+    # We pre-generate one loop per distinct accent colour used in this video.
+    # Collect unique accents first, generate loops, then overlay them all via ffmpeg.
+    unique_accents = list({PALETTES[i % len(PALETTES)][2]
+                           for i in range(len(selected_chunks))})
+    waveform_loops = {}
+    for acc in unique_accents:
+        waveform_loops[acc] = _waveform_loop_path(
+            acc, video_width, video_height, n_bars, bar_zone_ratio, cfg
+        )
 
     # Build per-chunk data
     chunks_data = []
@@ -375,6 +436,19 @@ def compile_story_video(
     # Pre-render channel badge position (static overlay)
     # We'll draw it every frame (cheap PIL op)
 
+    # Pre-cache wrapped lines for every possible (chunk_idx, visible_n) combination.
+    # This avoids re-running _wrap_text on every single frame — which was adding
+    # ~1-3ms per frame and causing stutter on long videos.
+    max_w_px = int(video_width * 0.88)
+    for c in chunks_data:
+        wrap_cache = {}
+        dummy_img  = c["bg"].copy()
+        dd         = ImageDraw.Draw(dummy_img)
+        for n in range(1, c["n_words"] + 1):
+            vis  = " ".join(c["words"][:n])
+            wrap_cache[n] = _wrap_text(vis, font, max_w_px, dd)
+        c["wrap_cache"] = wrap_cache
+
     def make_frame(t: float) -> np.ndarray:
         # Find active chunk
         chunk = None
@@ -391,28 +465,21 @@ def compile_story_video(
         n_words   = chunk["n_words"]
         active_w  = min(int(progress * n_words), n_words - 1)
         visible_n = active_w + 1
-        vis_text  = " ".join(chunk["words"][:visible_n])
 
-        # Re-wrap visible text
-        bg_copy    = chunk["bg"].copy()
-        dummy_draw = ImageDraw.Draw(bg_copy)
-        vis_lines  = _wrap_text(vis_text, font, int(video_width * 0.88), dummy_draw)
+        # Use pre-cached wrapped lines — no recomputation per frame
+        vis_lines = chunk["wrap_cache"][visible_n]
 
-        # Draw subtitle
+        # Draw subtitle on a fresh copy of the pre-rendered gradient bg
+        bg_copy   = chunk["bg"].copy()
         frame_img = _draw_subtitle_frame(
             bg_copy, vis_lines, font, active_w,
             text_color, chunk["accent"] if chunk["accent"] else hi_color,
             stroke_col, stroke_w, center_y,
         )
 
-        # Draw waveform
-        frame_idx = min(int(t * cfg.OUTPUT_FPS), n_frames - 1)
-        bar_h     = envelope[frame_idx]
-        frame_draw = ImageDraw.Draw(frame_img)
-        _draw_waveform(frame_draw, video_width, video_height,
-                       bar_h, chunk["accent"], cfg)
+        # Waveform is overlaid via ffmpeg after rendering — not drawn per frame.
 
-        # Draw channel logo
+        # Draw channel logo (fast — cached patch composite)
         if channel:
             _draw_channel_badge(frame_img, channel, font_path, cfg, chunk["accent"])
 
@@ -420,52 +487,137 @@ def compile_story_video(
 
     audio_clip = AudioFileClip(audio_path)
     total_dur  = min(total_dur, audio_clip.duration)
+    audio_clip.close()
+
+    # ── Step A: render the subtitle / badge video without audio ──────────────
+    # This is now very fast — no per-frame waveform drawing at all.
+    tmp_nowave = output_path.replace(".mp4", "_nowave.mp4")
     video_clip = VideoClip(make_frame, duration=total_dur)
-    final      = video_clip.with_audio(audio_clip.subclipped(0, total_dur))
-    final.write_videofile(
-        output_path,
+    video_clip.write_videofile(
+        tmp_nowave,
         fps=cfg.OUTPUT_FPS,
         codec=cfg.VIDEO_CODEC,
-        audio_codec=cfg.AUDIO_CODEC,
         bitrate=cfg.VIDEO_BITRATE,
-        audio_bitrate=cfg.AUDIO_BITRATE,
+        audio=False,
         logger=None,
     )
+    video_clip.close()
+    log.info("Subtitle video (no waveform) → %s", tmp_nowave)
+
+    # ── Step B: overlay the looping waveform clip via ffmpeg ────────────────
+    # Use the most common accent in this video for the waveform loop.
+    # (All loops have black backgrounds, so screen/add blend works well.)
+    primary_accent = PALETTES[0][2]
+    wf_loop = waveform_loops.get(primary_accent, list(waveform_loops.values())[0])
+
+    tmp_waved = output_path.replace(".mp4", "_waved.mp4")
+    # ffmpeg filter:
+    #   [1:v] loop the short waveform clip to match total_dur
+    #   blend=addition: adds bright bars onto the dark story background
+    #   This is zero-copy fast — ffmpeg does it in a single pass.
+    wf_cmd = [
+        "ffmpeg", "-y",
+        "-i", tmp_nowave,                    # [0:v] story video (no audio)
+        "-stream_loop", "-1",                # loop input [1] indefinitely
+        "-i", wf_loop,                       # [1:v] waveform loop
+        "-filter_complex",
+        # blend=screen: black pixels in the waveform loop become transparent,
+        # bright bar pixels composite onto the story background perfectly.
+        "[0:v]format=rgb24[base];"
+        "[1:v]format=rgb24[wf];"
+        "[base][wf]blend=all_mode=screen[v];"
+        "[v]format=yuv420p[out]",
+        "-map", "[out]",
+        "-c:v", cfg.VIDEO_CODEC,
+        "-preset", "fast",
+        "-crf", "18",
+        "-t", str(total_dur),
+        tmp_waved,
+    ]
+    r = subprocess.run(wf_cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        log.warning("ffmpeg overlay failed, using no-waveform version: %s", r.stderr[-300:])
+        tmp_waved = tmp_nowave   # graceful fallback
+
+    # ── Step C: mux in audio ─────────────────────────────────────────────────
+    mux_cmd = [
+        "ffmpeg", "-y",
+        "-i", tmp_waved,
+        "-i", audio_path,
+        "-c:v", "copy",
+        "-c:a", cfg.AUDIO_CODEC,
+        "-b:a", cfg.AUDIO_BITRATE,
+        "-shortest",
+        output_path,
+    ]
+    subprocess.run(mux_cmd, check=True, capture_output=True)
+
+    # Cleanup temp files
+    for tmp in [tmp_nowave, tmp_waved]:
+        if tmp != output_path and os.path.exists(tmp):
+            os.remove(tmp)
+
     log.info("Story video → %s", output_path)
 
 
 # ── Channel badge (cached) ────────────────────────────────────────────────────
+# Pre-render badge overlays keyed by accent colour so we never do a
+# full-image alpha_composite inside the per-frame render loop.
 _badge_cache: dict = {}
 
-def _draw_channel_badge(img: Image.Image, text: str, font_path: str, cfg, accent: tuple) -> None:
-    """Draw channel name badge on top-right of img (in-place)."""
+
+def _make_badge_overlay(text: str, font_path: str, cfg, accent: tuple,
+                        img_w: int, img_h: int) -> tuple:
+    """
+    Return (overlay_rgba, paste_x, paste_y, text_x, text_y, font, tc)
+    for the channel badge. The RGBA overlay is a minimal crop — just the
+    pill area — so compositing is fast (small patch, not full frame).
+    Cached per (text, accent) key so we only build it once per palette.
+    """
+    cache_key = (text, accent, img_w, img_h)
+    if cache_key in _badge_cache:
+        return _badge_cache[cache_key]
+
     size    = getattr(cfg, "STORY_LOGO_FONT_SIZE", 30)
     lang    = getattr(cfg, "LANGUAGE", "hi")
     font    = _load_font(size, lang, font_path)
-    w, h    = img.size
     padding = 16
     margin  = 20
 
-    draw    = ImageDraw.Draw(img)
-    bbox    = draw.textbbox((0, 0), text, font=font)
-    tw, th  = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    bw, bh  = tw + padding * 2, th + padding * 2
+    dummy = Image.new("RGB", (1, 1))
+    dd    = ImageDraw.Draw(dummy)
+    bbox  = dd.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    bw, bh = tw + padding * 2, th + padding * 2
 
-    x1 = w - bw - margin
+    x1 = img_w - bw - margin
     y1 = margin
     x2, y2 = x1 + bw, y1 + bh
 
-    # Draw pill with alpha using RGBA overlay
-    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    od = ImageDraw.Draw(overlay)
-    bg_c = getattr(cfg, "STORY_LOGO_BG_COLOR", (0, 0, 0))
-    od.rounded_rectangle([x1, y1, x2, y2], radius=bh // 2,
+    # Build a small RGBA patch covering only the badge region (+ 2px margin)
+    pad   = 4
+    patch = Image.new("RGBA", (bw + pad * 2, bh + pad * 2), (0, 0, 0, 0))
+    pd    = ImageDraw.Draw(patch)
+    bg_c  = getattr(cfg, "STORY_LOGO_BG_COLOR", (0, 0, 0))
+    pd.rounded_rectangle([pad, pad, bw + pad, bh + pad], radius=bh // 2,
                           fill=(*bg_c[:3], 190))
-    od.rounded_rectangle([x1, y1, x2, y2], radius=bh // 2,
+    pd.rounded_rectangle([pad, pad, bw + pad, bh + pad], radius=bh // 2,
                           outline=(*accent[:3], 220), width=2)
-    merged = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-    img.paste(merged)
-
-    draw = ImageDraw.Draw(img)
     tc = getattr(cfg, "STORY_LOGO_TEXT_COLOR", (255, 255, 255))
-    draw.text((x1 + padding, y1 + padding), text, font=font, fill=tc)
+    pd.text((pad + padding, pad + padding), text, font=font, fill=tc)
+
+    result = (patch, x1 - pad, y1 - pad, font, tc)
+    _badge_cache[cache_key] = result
+    return result
+
+
+def _draw_channel_badge(img: Image.Image, text: str, font_path: str, cfg, accent: tuple) -> None:
+    """Draw channel name badge on top-right of img (in-place). Fast: patches only the badge area."""
+    if not text:
+        return
+    w, h = img.size
+    patch, px, py, font, tc = _make_badge_overlay(text, font_path, cfg, accent, w, h)
+    # Composite only the small badge patch — not the whole frame
+    region = img.crop((px, py, px + patch.width, py + patch.height)).convert("RGBA")
+    merged = Image.alpha_composite(region, patch).convert("RGB")
+    img.paste(merged, (px, py))

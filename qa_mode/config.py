@@ -23,7 +23,7 @@ OUTPUT_FPS     = 30
 # ─────────────────────────────────────────────────────────────
 #  NARRATION / TTS
 # ─────────────────────────────────────────────────────────────
-TTS_BACKEND = "xtts"
+TTS_BACKEND = "kokoro"
 
 XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
 
@@ -38,7 +38,7 @@ MACOS_TTS_RATE = 125
 # Gap between question being spoken and answer starting: 1 second
 TTS_PAUSE_BETWEEN_SEGMENTS = 0.3
 TTS_PAUSE_BETWEEN_PHRASES  = 0.20
-TTS_ANSWER_PAUSE_EXTRA     = 0.3   # short pause before answer begins
+TTS_ANSWER_PAUSE_EXTRA     = 0.0   # no pause before answer begins
 
 AUDIO_POST_PROCESSING = True
 AUDIO_FILTER = (
@@ -88,12 +88,12 @@ QA_ANSWER_FONT_SIZE    = 58
 QA_ANSWER_FONT_COLOR   = (255, 255, 255)
 
 # Set to 0 — no "try yourself" pause, no countdown
-QA_TRY_YOURSELF_SECONDS   = 0
+QA_TRY_YOURSELF_SECONDS   = 0   # keep 0 — no delay before answer
 QA_TRY_YOURSELF_TEXT      = ""
 QA_TRY_YOURSELF_FONT_SIZE = 58
 QA_TRY_YOURSELF_FONT_COLOR = (255, 255, 255)
 
-QA_COUNTDOWN_SECONDS   = 0
+QA_COUNTDOWN_SECONDS   = 0   # keep 0 — no countdown delay
 QA_COUNTDOWN_FONT_SIZE = round(58 * 1.6)
 QA_COUNTDOWN_FONT_COLOR = (255, 200, 40)
 
@@ -123,11 +123,51 @@ QA_SLIDE_ANSWER_FONT_SIZE   = 50
 QA_SLIDE_MARGIN_TOP_Q  = 0.04   # gap above question text
 QA_SLIDE_MARGIN_BOT_Q  = 0.02
 QA_SLIDE_MARGIN_TOP_A  = 0.04   # gap above answer text
-QA_SLIDE_MARGIN_BOT_A  = 0.10   # breathing room at bottom (~10%)
+QA_SLIDE_MARGIN_BOT_A  = 0.20   # breathing room at bottom (~10%)
 QA_SLIDE_MARGIN_SIDE   = 0.05   # left/right margin
 
 # True = new split-layout renderer; False = legacy subtitle overlay
 QA_USE_SPLIT_LAYOUT = True
+
+# ── Feature flags & settings ──────────────────────────────────
+
+# 1. PROGRESS BAR — thin bar at very top showing Q index / total
+QA_PROGRESS_BAR         = True
+QA_PROGRESS_BAR_HEIGHT  = 8           # pixels tall
+QA_PROGRESS_BAR_COLOR   = (245, 200, 66)    # filled portion
+QA_PROGRESS_BAR_BG      = (80, 80, 80)      # unfilled portion
+
+# 2. QUESTION NUMBER BADGE — "Q 3 / 10" pill in top-right of question band
+QA_QUESTION_BADGE       = True
+QA_BADGE_TEXT_COLOR     = (255, 255, 255)
+QA_BADGE_FONT_SIZE      = 36     # pixels
+QA_BADGE_PADDING        = 18     # horizontal padding inside pill
+QA_BADGE_MARGIN         = 20     # margin from right/top edge
+
+# 3. DIVIDER LINE between question and answer bands
+QA_DIVIDER              = True
+QA_DIVIDER_COLOR        = (255, 255, 255)
+QA_DIVIDER_HEIGHT       = 4      # pixels thick
+QA_DIVIDER_ALPHA        = 80     # 0-255 opacity
+
+# 4. SENTENCE-BY-SENTENCE reveal instead of word-by-word
+#    True  = reveal one full sentence at a time (smoother)
+#    False = original word-by-word reveal
+QA_SENTENCE_REVEAL      = False    # word-by-word (smoother than sentence)
+
+# 4b. POST-ANSWER HOLD — seconds to display full answer before next question
+QA_POST_ANSWER_HOLD     = 1.0
+
+# 5. FADE TRANSITION between question->answer and between questions
+#    Duration in seconds (0 = no fade)
+QA_FADE_DURATION        = 0.35
+
+# 6. WATERMARK — text shown in bottom-right corner of every frame
+QA_WATERMARK            = True
+QA_WATERMARK_TEXT       = "@ai.interview.guru1"
+QA_WATERMARK_COLOR      = (255, 255, 255)
+QA_WATERMARK_ALPHA      = 90     # 0-255 opacity
+QA_WATERMARK_FONT_SIZE  = 32     # pixels
 
 # ─────────────────────────────────────────────────────────────
 #  SUBTITLE STYLING

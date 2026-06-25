@@ -27,9 +27,11 @@ from core.lang.transliterate import clean_text
 
 log = get_logger("tts.xtts")
 
-# Maximum characters per XTTS chunk. XTTS-v2 handles ~250 chars cleanly;
-# beyond ~400 it starts rushing/distorting the end of the segment.
-XTTS_MAX_CHARS = 220
+# Maximum characters per XTTS chunk. Devanagari text is dense — each
+# character is one Unicode scalar (not 3 bytes) so 220 creates too many
+# micro-chunks with jarring pauses. 350 chars gives ~2-3 natural sentences
+# in Hindi, which XTTS-v2 handles cleanly.
+XTTS_MAX_CHARS = 350
 
 
 def _split_into_chunks(text: str, max_chars: int = XTTS_MAX_CHARS) -> list[str]:
@@ -44,8 +46,10 @@ def _split_into_chunks(text: str, max_chars: int = XTTS_MAX_CHARS) -> list[str]:
     if len(text) <= max_chars:
         return [text] if text else []
 
-    # Split on sentence-ending punctuation (keep delimiter with preceding text)
-    sentence_endings = re.compile(r'(?<=[।.?!])\s+')
+    # Split on sentence-ending punctuation.
+    # Hindi uses the danda (।) as primary boundary; \s* (not \s+) also
+    # splits after। with no trailing space, which is common in Hindi text.
+    sentence_endings = re.compile(r'(?<=[।.?!])\s*')
     sentences = sentence_endings.split(text)
 
     chunks = []
@@ -223,10 +227,22 @@ class XTTSStrategy(TTSStrategy):
                     for c_idx, chunk in enumerate(chunks, 1):
                         log.info("    Chunk %d/%d (%d chars): %s",
                                  c_idx, len(chunks), len(chunk), chunk[:50])
+                        # Quality parameters tuned for Hindi narration:
+                        #   temperature=0.65  — lower = more stable/clear, less mumbling
+                        #   speed=0.9         — slightly slower = better Hindi clarity
+                        #   top_k=50, top_p=0.85 — tighter sampling = less hallucination
+                        #   enable_text_splitting=False — we do our own splitting above;
+                        #     letting XTTS re-split fights with our chunks and causes
+                        #     repeated words / truncation at boundaries
                         wav = tts.tts(
                             text=chunk,
                             speaker_wav=voice_sample,
                             language=xtts_language,
+                            temperature=0.65,
+                            speed=0.9,
+                            top_k=50,
+                            top_p=0.85,
+                            enable_text_splitting=False,
                         )
                         arr = np.array(wav, dtype=np.float32)
                         if arr.size == 0:
@@ -234,9 +250,10 @@ class XTTSStrategy(TTSStrategy):
                             continue
                         seg_waves.append(arr)
 
-                        # Small natural pause between chunks (0.15s silence)
+                        # Natural pause between chunks — 0.25s for Hindi sentence
+                        # boundaries (danda); feels more like a real narrator pause
                         if c_idx < len(chunks):
-                            pause = np.zeros(int(sample_rate * 0.15), dtype=np.float32)
+                            pause = np.zeros(int(sample_rate * 0.25), dtype=np.float32)
                             seg_waves.append(pause)
 
                 except Exception as e:
