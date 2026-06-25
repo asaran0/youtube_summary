@@ -16,14 +16,14 @@ and its own metadata file listing exactly which questions are in that part.
 
 # Path to the questions file (relative to this file, or absolute).
 # Files live in the  questions/  folder by default.
-QUESTIONS_FILE = "questions/java basics.txt"
+QUESTIONS_FILE = "questions/artifical intelligence.txt"
 
 # How many Q&A pairs to include in each part video.
-QUESTIONS_PER_PART = 2
+QUESTIONS_PER_PART = 20
 
 # Base name used for output filenames and video titles.
 # e.g.  "java_basics"  →  java_basics_part1_qa.mp4, java_basics_part2_qa.mp4
-BATCH_TITLE = "Java Basic interview QA"
+BATCH_TITLE = "Artificial Intelligence Basic interview QA"
 
 # ── Output ───────────────────────────────────────────────────────────────────
 
@@ -37,10 +37,10 @@ OUTPUT_DIR = "output/qa/java"
 LANGUAGE = "en"
 
 # "reel" (1080×1920 vertical) | "full" (1920×1080 landscape) — None = default
-OUTPUT_MODE = "reel"
+OUTPUT_MODE = "full"
 
 # "macos" | "xtts" | "mms" — None = use config default
-TTS_BACKEND = "xtts"
+TTS_BACKEND = "kokoro"
 
 # Path to voice sample WAV (xtts only) — None = use config default
 XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"

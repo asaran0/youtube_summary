@@ -51,10 +51,20 @@ def clean_text(text: str, cfg) -> str:
     and excess whitespace — then applies language-specific handling
     based on cfg.LANGUAGE ("hi" / "en" / "hig").
     """
+    print("*****")
+    print(text)
     text = re.sub(r"https?://\S+", "", text)
     text = re.sub(r"\[.*?\]", "", text)
+    # Strip parenthetical content — shown on screen but NOT spoken.
+    # Repeat up to 5x for nested parens e.g. ((like this)).
+    for _ in range(5):
+        stripped = re.sub(r"\([^()]*\)", "", text)
+        if stripped == text:
+            break
+        text = stripped
     text = re.sub(r"[।\.]{2,}", "।", text)
     text = re.sub(r"\s+", " ", text).strip()
+    print("*************** ", text)
 
     language = getattr(cfg, "LANGUAGE", "hi")
     if language in ("hi", "hig"):

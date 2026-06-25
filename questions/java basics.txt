@@ -3,13 +3,13 @@ A: Java is a high-level, object-oriented programming language developed by Sun M
 
 Q: Explain the main features of Java.
 A: Key features of Java include:
-- Object-oriented
-- Platform-independent (via the Java Virtual Machine)
-- Simple and easy to learn
-- Distributed computing support (via RMI and EJB)
-- Multi-threading
-- Robust and secure (garbage collection, exception handling, etc.)
-- Dynamic and extensible
+Object-oriented
+Platform-independent (via the Java Virtual Machine)
+Simple and easy to learn
+Distributed computing support (via RMI and EJB)
+Multi-threading
+Robust and secure (garbage collection, exception handling, etc.)
+Dynamic and extensible
 
 Q: What is the difference between == and .equals() in Java?
 A: == is used for comparing primitive data types or checking if two references point to the same object. .equals() is used for comparing the content or values of objects and is usually overridden in custom classes.

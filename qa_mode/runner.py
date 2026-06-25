@@ -167,7 +167,10 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
                              getattr(cfg, "SUBTITLE_HIGHLIGHT_COLOR", (220, 120, 0))))
 
     font_q, font_a = _load_fonts(font_path, cfg)
-    text_w      = target_w - 2 * margin_side
+    # Reserve ~32px on the left for the bullet glyph (● ) so wrapped lines
+    # don't extend past the right margin when bullets are drawn.
+    _BULLET_RESERVE = 32
+    text_w      = target_w - 2 * margin_side - _BULLET_RESERVE
     a_line_h    = _line_height(font_a)
     para_gap    = int(a_line_h * 0.6)
     avail_a_h   = a_band_h - margin_top_a - margin_bot_a
@@ -362,7 +365,11 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         ans_dur       = max(entry["a_end"] - entry["a_start"], 0.001)
         progress      = min((t - entry["a_start"]) / ans_dur, 1.0)
         spoken_total  = len(entry["spoken_words"])
-        active_spoken = min(int(progress * spoken_total), spoken_total - 1)
+        # Character-weighted word timing: longer words take more time to speak,
+        # so we distribute time proportional to cumulative character count rather
+        # than evenly per word. This keeps the highlight much closer to the
+        # actual voice position, especially when word lengths vary a lot.
+        active_spoken = _char_weighted_word_idx(progress, entry["spoken_words"])
         active_display = _spoken_to_display_idx(
             active_spoken, entry["spoken_words"], entry["display_words"]
         )
@@ -453,6 +460,30 @@ def _count_para_words(para_lines: list) -> int:
         1 for item in para_lines if item is not None
         for t in _text_tokens(item) if t.strip()
     )
+
+
+def _char_weighted_word_idx(progress: float, spoken_words: list) -> int:
+    """
+    Return the index of the word currently being spoken, using
+    character-count weighting instead of uniform time per word.
+
+    TTS takes roughly proportional time per character (syllables ≈ chars),
+    so a 10-letter word occupies ~2x the time of a 5-letter word.
+    This makes the highlight track the voice far more accurately than
+    the old `int(progress * n_words)` uniform approach.
+    """
+    if not spoken_words:
+        return 0
+    # Build cumulative char weights (min 1 per word to avoid zero-width words)
+    lengths = [max(1, len(w)) for w in spoken_words]
+    total   = sum(lengths)
+    target  = progress * total
+    cumul   = 0
+    for i, ln in enumerate(lengths):
+        cumul += ln
+        if cumul >= target:
+            return i
+    return len(spoken_words) - 1
 
 
 def _spoken_to_display_idx(spoken_idx: int, spoken_words: list, display_words: list) -> int:
@@ -547,17 +578,35 @@ def _render_slide_paragraphs(
         draw.text((x, y), line, font=font_q, fill=q_color)
         y += q_lh + 8
 
-    # ── Answer — paragraph-aware, with highlight on active word ───────────
-    a_lh       = _line_height(font_a)
-    y          = q_band_h + margin_top_a
-    word_index = 0
+    # ── Answer — paragraph-aware, with bullet + highlight on active word ───
+    a_lh          = _line_height(font_a)
+    y             = q_band_h + margin_top_a
+    word_index    = 0
+    BULLET        = "● "          # filled circle bullet
+    BULLET_INDENT = 28            # px indent for continuation lines of same paragraph
+    bullet_color  = highlight_color   # bullet shares accent colour
+    # We draw a bullet at the start of each paragraph (first line after a
+    # None separator, or the very first line). Continuation lines of the
+    # same paragraph are indented to align with the text after the bullet.
+    start_of_para = True          # True = next rendered line is a para start
 
     for item in para_lines:
         if item is None:
             y += para_gap
+            start_of_para = True  # next line starts a new paragraph
             continue
         line = item
-        x = margin_side
+
+        if start_of_para:
+            # Draw bullet glyph before the line content
+            bw = _text_width(draw, BULLET, font_a)
+            draw.text((margin_side, y), BULLET, font=font_a, fill=bullet_color)
+            x = margin_side + bw
+            start_of_para = False
+        else:
+            # Continuation line — indent to align under text (after bullet)
+            x = margin_side + BULLET_INDENT
+
         tokens = _text_tokens(line)
         for token in tokens:
             is_word = bool(token.strip())
