@@ -54,6 +54,15 @@ supplies its own `style_resolver` callback. This is what lets a future
 third mode be added by writing a new `xyz_mode/` package, without
 touching `core/` at all.
 
+2. How to get MALE voice in Kokoro
+
+Important truth:
+
+👉 Kokoro does NOT label voices as “male/female”
+
+Instead it uses:
+
+-l {a,b,h,e,f,i,p,j,z}
 ## Usage
 
 ```bash

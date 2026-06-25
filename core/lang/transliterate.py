@@ -57,13 +57,13 @@ def clean_text(text: str, cfg) -> str:
     text = re.sub(r"\[.*?\]", "", text)
     # Strip parenthetical content — shown on screen but NOT spoken.
     # Repeat up to 5x for nested parens e.g. ((like this)).
-    for _ in range(5):
-        stripped = re.sub(r"\([^()]*\)", "", text)
-        if stripped == text:
-            break
-        text = stripped
-    text = re.sub(r"[।\.]{2,}", "।", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    # for _ in range(5):
+    #     stripped = re.sub(r"\([^()]*\)", "", text)
+    #     if stripped == text:
+    #         break
+    #     text = stripped
+    # text = re.sub(r"[।\.]{2,}", "।", text)
+    # text = re.sub(r"\s+", " ", text).strip()
     print("*************** ", text)
 
     language = getattr(cfg, "LANGUAGE", "hi")
