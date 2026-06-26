@@ -477,8 +477,8 @@ def render_empty_space_overlay(
     t: float,
     total_dur: float,
     font: ImageFont.FreeTypeFont,
-    text_start: str  = "Try to Answer",
-    text_end: str    = "In the Comments!",
+    text_start: str  = "Try to answer in comments",
+    text_end: str    = "Comment your doubts.",
     fade_in_at: float  = 10.0,   # seconds before end to start fading IN the overlay
     fade_out_at: float =  3.0,   # seconds before end to start fading OUT
     bg_color: Color    = (0, 0, 0),

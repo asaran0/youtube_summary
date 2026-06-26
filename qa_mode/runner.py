@@ -102,15 +102,16 @@ def _build_qa_pairs(selected: list[dict], cfg=None) -> list[dict]:
                 hold = float(getattr(cfg_ref[0], "QA_POST_ANSWER_HOLD", 1.0))
 
                 pairs.append({
-                    "question":       question_text,
-                    "display_text":   display_text,
-                    "spoken_words":   spoken_text.split(),    # drives highlight timing
-                    "display_words":  display_text.split(),   # flat list — used for word count only
-                    "display_tokens": display_tokens,         # structured — used for rendering
-                    "video_start":    q_start,
-                    "video_end":      a_end + hold,           # hold full answer on screen
-                    "ans_start":      a_start,
-                    "ans_end":        a_end,
+                    "question":         question_text,
+                    "q_spoken_words":   question_text.split(),  # for question word highlight
+                    "display_text":     display_text,
+                    "spoken_words":     spoken_text.split(),
+                    "display_words":    display_text.split(),
+                    "display_tokens":   display_tokens,
+                    "video_start":      q_start,
+                    "video_end":        a_end + hold,
+                    "ans_start":        a_start,
+                    "ans_end":          a_end,
                 })
                 i = j + 1
             else:
@@ -120,12 +121,15 @@ def _build_qa_pairs(selected: list[dict], cfg=None) -> list[dict]:
     return pairs
 
 
+import numpy as np
+
 def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_path, cfg) -> str:
     from qa_mode.qa_slideshow import (
         _load_fonts, _wrap_text_px, _paginate, _render_slide,
         _line_height, _parse_color, _count_words_in_lines,
     )
     from moviepy import AudioFileClip, VideoClip
+    from PIL import Image
     import numpy as np
 
     qa_pairs = _build_qa_pairs(selected, cfg)
@@ -279,7 +283,8 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         all_display_lines = _wrap_paragraphs(pair["display_text"], font_a, text_w)
         entries.append({
             "q_lines":           _wrap_text_px(pair["question"], font_q, text_w),
-            "q_num":             pair.get("q_num", entry_idx + 1),  # for "Q 1" label
+            "q_spoken_words":    pair.get("q_spoken_words", pair["question"].split()),
+            "q_num":             pair.get("q_num", entry_idx + 1),
             "spoken_words":      pair["spoken_words"],
             "display_words":     pair["display_words"],
             "display_tokens":    pair["display_tokens"],
@@ -296,47 +301,47 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     post_hold = float(getattr(cfg, "QA_POST_ANSWER_HOLD", 1.0))
     total_dur = min(max(audio_dur, entries[-1]["v_end"]), audio_dur)
 
-    def _get_fade_alpha(t, entry, entry_idx):
+    # Crossfade state: store last rendered numpy frame so we can blend
+    # smoothly between questions without any black flash.
+    _xfade = {"prev_frame": None, "prev_entry_idx": -1}
+
+    def _crossfade_blend(new_frame_np, t, entry, entry_idx):
         """
-        Return fade alpha 0-255 for the black overlay.
-        255 = fully visible (no black), 0 = completely black.
-
-        Uses a smooth "dip to brightness" transition — instead of going fully
-        black between questions (which causes a blink), we do a gentle dip
-        to ~30% black at the midpoint of the transition.  This creates a
-        smooth dissolve-like feel with no hard black flash.
-
-        Timeline per question:
-          v_start ──[fade_in]──> fully bright ──> ... ──[gentle_dip_out]──> v_end
-                                                                            |
-                                                              next entry starts here
-                                                             [gentle_dip_in]──> bright
+        Return a numpy RGB frame that smoothly crossfades from the
+        previously cached frame to new_frame_np during transitions.
+        No black frame is ever inserted — the two slides blend directly.
         """
-        if fade_dur <= 0:
-            return 255
+        import numpy as np
+        hold     = float(getattr(cfg, "QA_POST_ANSWER_HOLD", 1.0))
+        xdur     = min(fade_dur, hold * 0.85)   # crossfade window in seconds
+        if xdur <= 0 or fade_dur <= 0:
+            _xfade["prev_frame"]     = new_frame_np
+            _xfade["prev_entry_idx"] = entry_idx
+            return new_frame_np
 
-        hold = float(getattr(cfg, "QA_POST_ANSWER_HOLD", 1.0))
+        # ── Detect transition: entry changed since last frame ─────────────────
+        if entry_idx != _xfade["prev_entry_idx"]:
+            # Just crossed into a new question — reset crossfade
+            _xfade["xfade_start"]    = t
+            _xfade["prev_entry_idx"] = entry_idx
+            # prev_frame keeps the OLD entry's last frame for blending
 
-        # ── Fade OUT: dip at the end of the hold (before next question) ───────
-        fade_out_start = entry["v_end"] - min(fade_dur, hold * 0.8)
-        if t >= fade_out_start and entry_idx < total_pairs - 1:
-            p         = (t - fade_out_start) / max(fade_dur, 0.001)
-            p         = max(0.0, min(1.0, p))
-            # Ease-in: start slow, accelerate into dip. Max dip = 180 (not 0).
-            dip       = int(180 * (p ** 2))   # 255-180=75 → darkens but never full black
-            return max(75, 255 - dip)
+        xfade_start = _xfade.get("xfade_start", t)
+        elapsed     = t - xfade_start
 
-        # ── Fade IN: recover from dip at the start of this question ──────────
-        # Skip for first question — starts bright immediately
-        since_start = t - entry["v_start"]
-        if since_start < fade_dur and entry_idx > 0:
-            p     = since_start / fade_dur
-            p     = max(0.0, min(1.0, p))
-            # Ease-out: start fast, decelerate into full brightness
-            dip   = int(180 * ((1.0 - p) ** 2))
-            return max(75, 255 - dip)
+        if elapsed < xdur and _xfade["prev_frame"] is not None and entry_idx > 0:
+            # Ease-in-out blend: 0 → fully prev, 1 → fully new
+            p      = elapsed / xdur
+            p      = 3 * p * p - 2 * p * p * p   # smoothstep
+            frame  = (
+                (1.0 - p) * _xfade["prev_frame"].astype(np.float32)
+                +       p  * new_frame_np.astype(np.float32)
+            ).clip(0, 255).astype(np.uint8)
+        else:
+            frame = new_frame_np
 
-        return 255
+        _xfade["prev_frame"] = new_frame_np
+        return frame
 
     def _get_sentence_visible_n(progress, tokens):
         """
@@ -390,8 +395,8 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         # ── Badge text
         badge_str = f"Q {entry_idx + 1} / {total_pairs}" if use_badge else None
 
-        # ── Fade alpha
-        fa = _get_fade_alpha(t, entry, entry_idx)
+        # Crossfade handled after rendering — fade_alpha always 255 (no black overlay)
+        fa = 255
 
         # ── Common render kwargs
         # (subscribe handled by render_crawl_overlays below)
@@ -445,10 +450,17 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         )
 
         if t < entry["a_start"]:
-            # ── Question phase — blank answer band ────────────────────────
+            # ── Question phase — blank answer band, question words highlighted
+            q_dur        = max(entry["a_start"] - entry["v_start"], 0.001)
+            q_progress   = min((t - entry["v_start"]) / q_dur, 1.0)
+            active_q_word = _char_weighted_word_idx(
+                q_progress, entry["q_spoken_words"]
+            )
             img = _render_slide_paragraphs(
                 q_lines=entry["q_lines"], para_lines=[],
-                active_word=-1, **common,
+                active_word=-1,
+                active_q_word=active_q_word,
+                **common,
             )
         else:
             # ── Answer phase ───────────────────────────────────────────────
@@ -477,6 +489,12 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
                 q_lines=entry["q_lines"], para_lines=cur_page,
                 active_word=page_active, **common,
             )
+
+        # ── Crossfade between questions (direct frame blend, no black) ──────
+        frame_np = _crossfade_blend(
+            np.array(img, dtype=np.uint8), t, entry, entry_idx
+        )
+        img = Image.fromarray(frame_np)
 
         # Apply crawl/ticker overlays — runs for both question and answer phases
         img = render_crawl_overlays(img, t, crawl_specs)
@@ -701,7 +719,8 @@ def _render_slide_paragraphs(
     bot_progress_h=6,
     bot_progress_color=(245, 200, 66),
     bot_progress_bg=(60, 60, 60),
-    total_dur=None,   # unused in renderer; kept for caller convenience
+    total_dur=None,
+    active_q_word=-1,  # index of currently-spoken word in question text (-1 = none)
 ):
     from qa_mode.qa_slideshow import _line_height, _text_width, _text_tokens, _parse_color
     from PIL import Image, ImageDraw
@@ -755,11 +774,31 @@ def _render_slide_paragraphs(
         draw = ImageDraw.Draw(img)
         y   += q_num_h
 
+    # Draw question text word by word, highlighting the currently spoken word.
+    # We tokenise each line then measure the full line width to centre it,
+    # then draw word-by-word so we can change colour per word.
+    q_word_cursor = 0   # tracks which absolute word index we are at
     for line in q_lines:
-        tw = _text_width(draw, line, font_q)
-        x  = (video_width - tw) // 2
+        words_in_line = line.split()
+        if not words_in_line:
+            y += q_lh + 8
+            continue
+
+        # Measure full line for centring
+        tw  = _text_width(draw, line, font_q)
+        x   = (video_width - tw) // 2
+
+        # Shadow pass (whole line at once — cheaper)
         draw.text((x + 2, y + 2), line, font=font_q, fill=(0, 0, 0, 50))
-        draw.text((x, y), line, font=font_q, fill=q_color)
+
+        # Word-by-word colour pass
+        cx = x
+        for word in words_in_line:
+            is_active = (active_q_word >= 0 and q_word_cursor == active_q_word)
+            col = highlight_color if is_active else q_color
+            draw.text((cx, y), word, font=font_q, fill=col)
+            cx += _text_width(draw, word + " ", font_q)
+            q_word_cursor += 1
         y += q_lh + 8
 
     # ── Answer — paragraph-aware, with bullet + highlight on active word ───
@@ -862,14 +901,10 @@ def _render_slide_paragraphs(
         if filled > 0:
             draw.rectangle([0, by0, filled, by1], fill=bot_progress_color)
 
-    # ── 5. Fade overlay (black) — applied last ────────────────────────────
-    if fade_alpha < 255:
-        fade_alpha = max(0, min(255, int(fade_alpha)))
-        if fade_alpha > 0:
-            overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-            odraw   = ImageDraw.Draw(overlay)
-            odraw.rectangle([0, 0, video_width, video_height],
-                            fill=(0, 0, 0, 255 - fade_alpha))
+    # ── 5. Fade overlay — removed; crossfade is now done via numpy blend ─
+    if False:  # kept as placeholder so surrounding code is unchanged
+        pass
+        if False:
             img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
     return img
