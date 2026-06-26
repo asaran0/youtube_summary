@@ -497,8 +497,8 @@ def render_empty_space_overlay(
     t           : current time in seconds
     total_dur   : total video duration in seconds
     font        : PIL font for the text labels
-    text_start  : text shown during fade-in phase ("Coming up...")
-    text_end    : text shown during fade-out phase ("Thanks for watching!")
+    text_start  : text shown during fade-in phase ("Try to Answer...")
+    text_end    : text shown during fade-out phase ("In the comments!")
     fade_in_at  : seconds before end when overlay starts appearing (default 10)
     fade_out_at : seconds before end when overlay starts disappearing (default 3)
     bg_color    : RGB background tint colour

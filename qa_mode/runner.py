@@ -703,7 +703,7 @@ def _render_slide_paragraphs(
         nlh         = _line_height(q_num_font)
         # Letter-spacing effect: thin shadow only, bright readable colour
         shadow_col  = (0, 0, 0, 45)
-        label_col   = (255, 255, 255, 210)   # near-white, clear on any q_bg
+        label_col   = (50, 50, 50, 210)   # near-black, clear on any q_bg
         # Draw with RGBA so alpha works
         tmp = img.convert("RGBA")
         td  = ImageDraw.Draw(tmp)

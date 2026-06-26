@@ -92,7 +92,7 @@ def load_qa_file(path: str, cfg) -> list[dict]:
     #   Q1: ... A1: ...         (numbered format — number is ignored; order is used)
     #   Q1: ... A: ...          (mixed — also accepted)
     pattern = re.compile(
-        r"Q\d*:\s*(.+?)\s*A\d*:\s*(.+?)(?=\n\s*Q\d*:|\Z)",
+        r"Q(\d*):\s*(.+?)\s*A\d*:\s*(.+?)(?=\n\s*Q\d*:|\Z)",
         re.DOTALL,
     )
     pairs = pattern.findall(raw)
@@ -107,8 +107,9 @@ def load_qa_file(path: str, cfg) -> list[dict]:
 
     segments = []
     seg_id = 0
+    ques_no = 0
 
-    for q_num, (question, answer) in enumerate(pairs, start=1):
+    for q_num, (num, question, answer) in enumerate(pairs, start=1):
         question = " ".join(question.split())
         answer_raw = " ".join(answer.split())
 
@@ -118,6 +119,10 @@ def load_qa_file(path: str, cfg) -> list[dict]:
         else:
             display_question = question
 
+        if num:
+            ques_no = num
+        else:
+            ques_no = q_num
         # Question: spoken text = display text (questions rarely have parens)
         segments.append({
             "id": seg_id,
@@ -132,35 +137,35 @@ def load_qa_file(path: str, cfg) -> list[dict]:
         seg_id += 1
 
         # ── Try yourself (silent) ────────────────────────────────────────
-        segments.append({
-            "id": seg_id,
-            "start": float(seg_id),
-            "end": float(seg_id + 1),
-            "text": "",
-            "display_text": cfg.QA_TRY_YOURSELF_TEXT,
-            "avg_logprob": -0.1,
-            "no_speech_prob": 0.01,
-            "style": "try_yourself",
-            "is_silent": True,
-            "silent_duration": float(cfg.QA_TRY_YOURSELF_SECONDS),
-        })
-        seg_id += 1
+        # segments.append({
+        #     "id": seg_id,
+        #     "start": float(seg_id),
+        #     "end": float(seg_id + 1),
+        #     "text": "",
+        #     "display_text": cfg.QA_TRY_YOURSELF_TEXT,
+        #     "avg_logprob": -0.1,
+        #     "no_speech_prob": 0.01,
+        #     "style": "try_yourself",
+        #     "is_silent": True,
+        #     "silent_duration": float(cfg.QA_TRY_YOURSELF_SECONDS),
+        # })
+        # seg_id += 1
 
         # ── Countdown (silent) ───────────────────────────────────────────
-        countdown_text = " ".join(str(n) for n in range(cfg.QA_COUNTDOWN_SECONDS, 0, -1))
-        segments.append({
-            "id": seg_id,
-            "start": float(seg_id),
-            "end": float(seg_id + 1),
-            "text": "",
-            "display_text": countdown_text,
-            "avg_logprob": -0.1,
-            "no_speech_prob": 0.01,
-            "style": "countdown",
-            "is_silent": True,
-            "silent_duration": float(cfg.QA_COUNTDOWN_SECONDS),
-        })
-        seg_id += 1
+        # countdown_text = " ".join(str(n) for n in range(cfg.QA_COUNTDOWN_SECONDS, 0, -1))
+        # segments.append({
+        #     "id": seg_id,
+        #     "start": float(seg_id),
+        #     "end": float(seg_id + 1),
+        #     "text": "",
+        #     "display_text": countdown_text,
+        #     "avg_logprob": -0.1,
+        #     "no_speech_prob": 0.01,
+        #     "style": "countdown",
+        #     "is_silent": True,
+        #     "silent_duration": float(cfg.QA_COUNTDOWN_SECONDS),
+        # })
+        # seg_id += 1
 
         # ── Answer ───────────────────────────────────────────────────────
         # text       → TTS speaks this (parens stripped)
@@ -179,7 +184,7 @@ def load_qa_file(path: str, cfg) -> list[dict]:
             "no_speech_prob": 0.01,
             "style": "answer",
             "is_answer": True,
-            "q_num": q_num,          # 1-based question number for "Q 1" label
+            "q_num": ques_no,          # 1-based question number for "Q 1" label
         })
         seg_id += 1
 
