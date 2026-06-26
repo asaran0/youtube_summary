@@ -236,7 +236,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     })())[0]
 
     # Question number label font — smaller than question font
-    _qnum_fs = max(20, getattr(cfg, "QA_QNUM_FONT_SIZE", int(
+    _qnum_fs = max(30, getattr(cfg, "QA_QNUM_FONT_SIZE", int(
         getattr(cfg, "QA_SLIDE_QUESTION_FONT_SIZE", 52) * 0.55
     )))
     _qnum_font = _load_fonts(font_path, type("_C", (), {

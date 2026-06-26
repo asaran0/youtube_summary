@@ -233,7 +233,7 @@ CRF            = 23
 
 
 # ── Question number label ─────────────────────────────────────────────────────
-QA_QNUM_FONT_SIZE      = 28          # font size for "Question 1" label above question text
+QA_QNUM_FONT_SIZE      = 38          # font size for "Question 1" label above question text
 
 # ── Bottom-of-question-band progress bar ─────────────────────────────────────
 QA_BOT_PROGRESS        = True        # show answer-spoken progress bar at bottom of Q band
