@@ -21,7 +21,9 @@ Install (NOT in requirements.txt by default — uncomment there, or):
 To remove this backend entirely: delete this file and its one line in
 core/tts/factory.py — nothing else references it.
 """
+
 import numpy as np
+
 from utils import get_logger
 from core.tts.base import TTSStrategy
 from core.lang.transliterate import clean_text
@@ -31,6 +33,7 @@ log = get_logger("tts.veena")
 _DEFAULT_MODEL_ID = "maya-research/veena-tts"
 _SNAC_MODEL_ID = "hubertsiuzdak/snac_24khz"
 
+# Fixed control token IDs (from the Veena model card) — not configurable.
 _START_OF_SPEECH_TOKEN = 128257
 _END_OF_SPEECH_TOKEN = 128258
 _START_OF_HUMAN_TOKEN = 128259
@@ -47,19 +50,21 @@ class VeenaStrategy(TTSStrategy):
 
     def check_available(self, cfg) -> None:
         try:
-            import transformers  # noqa
-            import torch  # noqa
-            import snac  # noqa
+            import transformers  # noqa: F401
+            import torch  # noqa: F401
+            import snac  # noqa: F401
         except ImportError as e:
             raise RuntimeError(
-                f"Missing dependency: {e}\n"
-                "Install: pip install transformers torch snac soundfile"
+                f"TTS_BACKEND is 'veena' but a required package is missing: {e}.\n"
+                "Install with:  pip install transformers torch snac soundfile"
             )
-
         import torch
         if not torch.cuda.is_available():
             log.warning(
-                "CUDA not found. Running Veena in CPU-safe mode (slow but stable)."
+                "Veena is designed for CUDA + 4-bit quantization. No CUDA GPU "
+                "detected — falling back to an unquantized load on MPS/CPU, "
+                "which needs a lot of RAM (3B params) and will be slow. "
+                "This is expected/known on Apple Silicon, not a bug."
             )
 
     def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
@@ -69,36 +74,39 @@ class VeenaStrategy(TTSStrategy):
 
         model_id = getattr(cfg, "VEENA_MODEL_ID", _DEFAULT_MODEL_ID)
         speaker = getattr(cfg, "VEENA_SPEAKER", "kavya")
+        if speaker not in _VALID_SPEAKERS:
+            log.warning("Unknown VEENA_SPEAKER '%s', falling back to 'kavya'", speaker)
+            speaker = "kavya"
         temperature = getattr(cfg, "VEENA_TEMPERATURE", 0.4)
         top_p = getattr(cfg, "VEENA_TOP_P", 0.9)
 
-        if speaker not in _VALID_SPEAKERS:
-            log.warning("Invalid speaker '%s', using 'kavya'", speaker)
-            speaker = "kavya"
+        use_cuda = torch.cuda.is_available()
+        device = "cuda" if use_cuda else ("mps" if torch.backends.mps.is_available() else "cpu")
+        log.info("Loading Veena model on %s …", device)
 
-        # 🔥 FORCE CPU (prevents MPS OOM)
-        device = "cpu"
-        log.info("Veena running in CPU-safe mode (slow but stable)")
-
-        load_kwargs = {
-            "trust_remote_code": True,
-            "torch_dtype": torch.float32
-        }
+        load_kwargs = {"trust_remote_code": True}
+        if use_cuda:
+            from transformers import BitsAndBytesConfig
+            load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True,
+            )
+            load_kwargs["device_map"] = "auto"
+        else:
+            load_kwargs["torch_dtype"] = torch.float32
 
         model = AutoModelForCausalLM.from_pretrained(model_id, **load_kwargs)
-        model = model.to(device)
+        if not use_cuda:
+            model = model.to(device)
         model.eval()
 
         tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-
-        snac_model = SNAC.from_pretrained(_SNAC_MODEL_ID).eval().cpu()
+        snac_model = SNAC.from_pretrained(_SNAC_MODEL_ID).eval().to(device)
         sample_rate = 24000
 
         results = []
-
         for i, text in enumerate(texts, 1):
-            log.info("TTS %d/%d: %s", i, len(texts), text[:50])
-
+            log.info("  TTS %d/%d: %s …", i, len(texts), text[:50])
             cleaned = clean_text(text, cfg)
             if not cleaned:
                 results.append(_silent_segment(text, sample_rate))
@@ -106,56 +114,39 @@ class VeenaStrategy(TTSStrategy):
 
             try:
                 waveform = self._synthesize_one(
-                    cleaned,
-                    speaker,
-                    model,
-                    tokenizer,
-                    snac_model,
-                    device,
-                    temperature,
-                    top_p,
+                    cleaned, speaker, model, tokenizer, snac_model, device, temperature, top_p,
                 )
-
                 samples = _float_to_int16(waveform)
                 dur = len(samples) / sample_rate
-
                 results.append({
                     "samples": samples,
                     "sample_rate": sample_rate,
                     "phrases": [{"text": cleaned, "start": 0.0, "end": dur}],
                 })
-
             except Exception as e:
-                log.warning("Veena failed segment %d: %s", i, e)
+                log.warning("Veena TTS failed for segment %d: %s", i, e)
                 results.append(_silent_segment(text, sample_rate))
 
+        log.info("Veena generation complete.")
         return results
 
-    def _synthesize_one(self, text, speaker, model, tokenizer, snac_model,
-                        device, temperature, top_p):
+    def _synthesize_one(self, text, speaker, model, tokenizer, snac_model, device, temperature, top_p):
         import torch
-        import gc
 
         prompt = f"<spk_{speaker}> {text}"
         prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
-
         input_tokens = [
-            _START_OF_HUMAN_TOKEN,
-            *prompt_tokens,
-            _END_OF_HUMAN_TOKEN,
-            _START_OF_AI_TOKEN,
-            _START_OF_SPEECH_TOKEN,
+            _START_OF_HUMAN_TOKEN, *prompt_tokens, _END_OF_HUMAN_TOKEN,
+            _START_OF_AI_TOKEN, _START_OF_SPEECH_TOKEN,
         ]
-
         input_ids = torch.tensor([input_tokens], device=device)
 
-        # 🔥 Reduced token budget (prevents RAM spikes)
-        max_tokens = min(int(len(text) * 0.8) * 5 + 10, 300)
+        max_tokens = min(int(len(text) * 1.3) * 7 + 21, 700)
 
         with torch.no_grad():
             output = model.generate(
                 input_ids,
-                use_cache=False,   # 🔥 IMPORTANT: reduces memory
+                use_cache=True,
                 max_new_tokens=max_tokens,
                 do_sample=True,
                 temperature=temperature,
@@ -166,28 +157,22 @@ class VeenaStrategy(TTSStrategy):
             )
 
         generated_ids = output[0][len(input_tokens):].tolist()
-
         snac_tokens = [
             t for t in generated_ids
             if _AUDIO_CODE_BASE_OFFSET <= t < _AUDIO_CODE_BASE_OFFSET + 7 * 4096
         ]
-
+        # Truncate to a whole number of 7-token SNAC frames
         snac_tokens = snac_tokens[: len(snac_tokens) - (len(snac_tokens) % 7)]
-
         if not snac_tokens:
-            raise RuntimeError("No audio tokens generated")
+            raise RuntimeError("Model produced no audio tokens")
 
-        result = _decode_snac(snac_tokens, snac_model, device)
-
-        # 🔥 cleanup (important for long runs)
-        del output
-        del input_ids
-        gc.collect()
-
-        return result
+        return _decode_snac(snac_tokens, snac_model, device)
 
 
 def _decode_snac(snac_tokens: list[int], snac_model, device) -> np.ndarray:
+    """De-interleave Veena's 7-tokens-per-frame SNAC codes into the 3
+    hierarchical levels SNAC expects, then decode to a waveform. Logic
+    follows the reference de-interleaving from the Veena model card."""
     import torch
 
     llm_codebook_offsets = [_AUDIO_CODE_BASE_OFFSET + i * 4096 for i in range(7)]
@@ -203,7 +188,7 @@ def _decode_snac(snac_tokens: list[int], snac_model, device) -> np.ndarray:
         codes_lvl[2].append(snac_tokens[i + 6] - llm_codebook_offsets[6])
 
     hierarchical_codes = [
-        torch.tensor(lvl, dtype=torch.int32, device="cpu").unsqueeze(0)
+        torch.tensor(lvl, dtype=torch.int32, device=device).unsqueeze(0)
         for lvl in codes_lvl
     ]
 

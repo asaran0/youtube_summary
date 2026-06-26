@@ -123,7 +123,7 @@ QA_SLIDE_ANSWER_FONT_SIZE   = 50
 QA_SLIDE_MARGIN_TOP_Q  = 0.04   # gap above question text
 QA_SLIDE_MARGIN_BOT_Q  = 0.02
 QA_SLIDE_MARGIN_TOP_A  = 0.04   # gap above answer text
-QA_SLIDE_MARGIN_BOT_A  = 0.20   # breathing room at bottom (~10%)
+QA_SLIDE_MARGIN_BOT_A  = 0.10   # breathing room at bottom (~10%)
 QA_SLIDE_MARGIN_SIDE   = 0.05   # left/right margin
 
 # True = new split-layout renderer; False = legacy subtitle overlay
@@ -230,6 +230,38 @@ AUDIO_CODEC    = "aac"
 VIDEO_BITRATE  = "4000k"
 AUDIO_BITRATE  = "192k"
 CRF            = 23
+
+
+# ── Question number label ─────────────────────────────────────────────────────
+QA_QNUM_FONT_SIZE      = 28          # font size for "Question 1" label above question text
+
+# ── Bottom-of-question-band progress bar ─────────────────────────────────────
+QA_BOT_PROGRESS        = True        # show answer-spoken progress bar at bottom of Q band
+QA_BOT_PROGRESS_HEIGHT = 6           # height in pixels
+QA_BOT_PROGRESS_COLOR  = (245, 200, 66)   # filled portion colour
+QA_BOT_PROGRESS_BG     = (60, 60, 60)     # unfilled portion colour
+
+# ── Subscribe crawl overlay (slides in during last N seconds) ─────────────────
+QA_SUBSCRIBE_SECS      = 7.0         # show in last N seconds of video
+QA_SUBSCRIBE_TEXT      = "Subscribe for Upcoming Q&A Sessions!"
+QA_SUBSCRIBE_STYLE     = "pill"      # "pill" | "banner" | "neon" | "ghost"
+QA_SUBSCRIBE_ACCENT    = (245, 200, 66)
+QA_SUBSCRIBE_BG        = (15, 15, 30)
+
+# ── End-of-video empty-space smooth transition ───────────────────────────────
+QA_TRANSITION_FADE_IN_AT  = 10.0   # seconds before end: overlay starts fading in
+QA_TRANSITION_FADE_OUT_AT =  3.0   # seconds before end: overlay starts fading out
+QA_TRANSITION_OPACITY     =  0.55  # peak opacity (0.0–1.0)
+
+# ── Hook crawl overlay (appears at the start, or any custom time) ─────────────
+# Set QA_HOOK_TEXT to a non-empty string to enable. Leave empty to disable.
+QA_HOOK_TEXT           = ""          # e.g. "3 things every Java dev must know"
+QA_HOOK_SUBTEXT        = ""          # smaller line below hook text
+QA_HOOK_START          = 0.0        # seconds from video start
+QA_HOOK_DURATION       = 4.0        # how long the hook stays on screen
+QA_HOOK_Y_FRAC         = 0.10       # vertical position: 0.0=top, 1.0=bottom
+QA_HOOK_STYLE          = "neon"     # "pill" | "banner" | "neon" | "ghost"
+QA_HOOK_ACCENT         = (80, 200, 255)
 
 
 def video_dimensions() -> tuple[int, int]:

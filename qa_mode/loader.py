@@ -1,10 +1,20 @@
 """
 qa_mode/loader.py — Read a Q&A text file into TTS-ready segments.
 
-Input file format:
-    Q: What is an Abstract Class?
-    A: An abstract class can have both abstract methods (without a body)
-       and concrete methods (with a body).
+Input file format (both styles accepted):
+
+    Plain labels:
+        Q: What is an Abstract Class?
+        A: An abstract class can have both abstract methods (without a body)
+           and concrete methods (with a body).
+
+    Numbered labels:
+        Q1: What is an Abstract Class?
+        A1: An abstract class can have both abstract methods (without a body)
+            and concrete methods (with a body).
+
+        Q2: What is Kafka?
+        A2: Kafka is a distributed event streaming platform.
 
 Key behaviours:
   • Parenthetical content like (without a body) is SHOWN on screen but
@@ -20,26 +30,22 @@ import re
 
 # ── Text helpers ──────────────────────────────────────────────────────────────
 
-# def _strip_parens(text: str) -> str:
-#     """
-#     Remove all parenthetical content for TTS narration.
-#     '(without a body)' → '' so the spoken word count matches display.
-#     Handles nested and multiple parentheses cleanly.
-#     """
-#     # Remove (...) content — repeat to handle nested
-#     result = text
-#     for _ in range(5):
-#         new = re.sub(r'\([^()]*\)', '', result)
-#         if new == result:
-#             break
-#         result = new
-#     # Collapse extra spaces left behind
-#     return re.sub(r'  +', ' ', result).strip()
-
 def _strip_parens(text: str) -> str:
-    text = re.sub(r"[()]", "", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    """
+    Remove all parenthetical content for TTS narration.
+    '(without a body)' → '' so the spoken word count matches display.
+    Handles nested and multiple parentheses cleanly.
+    """
+    # Remove (...) content — repeat to handle nested
+    result = text
+    for _ in range(5):
+        new = re.sub(r'\([^()]*\)', '', result)
+        if new == result:
+            break
+        result = new
+    # Collapse extra spaces left behind
+    return re.sub(r'  +', ' ', result).strip()
+
 
 def _spoken_words(text: str) -> list[str]:
     """Return the word list as TTS will speak them (parens stripped)."""
@@ -81,27 +87,37 @@ def load_qa_file(path: str, cfg) -> list[dict]:
     with open(path, encoding="utf-8") as f:
         raw = f.read()
 
-    pattern = re.compile(r"Q(\d*):\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)", re.DOTALL)
+    # Support both plain labels and numbered labels:
+    #   Q: ...  A: ...          (original format)
+    #   Q1: ... A1: ...         (numbered format — number is ignored; order is used)
+    #   Q1: ... A: ...          (mixed — also accepted)
+    pattern = re.compile(
+        r"Q\d*:\s*(.+?)\s*A\d*:\s*(.+?)(?=\n\s*Q\d*:|\Z)",
+        re.DOTALL,
+    )
     pairs = pattern.findall(raw)
 
     if not pairs:
-        raise ValueError(f"No 'Q: ... A: ...' pairs found in {path}")
+        raise ValueError(
+            f"No Q/A pairs found in {path}.\n"
+            f"Accepted formats:\n"
+            f"  Q: question text\n  A: answer text\n"
+            f"  Q1: question text\n  A1: answer text"
+        )
 
     segments = []
     seg_id = 0
 
-    for q_num, (num, question, answer) in enumerate(pairs, start=1):
+    for q_num, (question, answer) in enumerate(pairs, start=1):
         question = " ".join(question.split())
         answer_raw = " ".join(answer.split())
 
-        
         # ── Question ─────────────────────────────────────────────────────
         if cfg.QA_SHOW_QUESTION_LABEL:
             display_question = cfg.QA_QUESTION_LABEL_TEMPLATE.format(n=q_num) + question
         else:
             display_question = question
-        if num:
-            display_question = f"Q{num}.\n{display_question}"
+
         # Question: spoken text = display text (questions rarely have parens)
         segments.append({
             "id": seg_id,
@@ -116,35 +132,35 @@ def load_qa_file(path: str, cfg) -> list[dict]:
         seg_id += 1
 
         # ── Try yourself (silent) ────────────────────────────────────────
-        # segments.append({
-        #     "id": seg_id,
-        #     "start": float(seg_id),
-        #     "end": float(seg_id + 1),
-        #     "text": "",
-        #     "display_text": cfg.QA_TRY_YOURSELF_TEXT,
-        #     "avg_logprob": -0.1,
-        #     "no_speech_prob": 0.01,
-        #     "style": "try_yourself",
-        #     "is_silent": True,
-        #     "silent_duration": float(cfg.QA_TRY_YOURSELF_SECONDS),
-        # })
-        # seg_id += 1
+        segments.append({
+            "id": seg_id,
+            "start": float(seg_id),
+            "end": float(seg_id + 1),
+            "text": "",
+            "display_text": cfg.QA_TRY_YOURSELF_TEXT,
+            "avg_logprob": -0.1,
+            "no_speech_prob": 0.01,
+            "style": "try_yourself",
+            "is_silent": True,
+            "silent_duration": float(cfg.QA_TRY_YOURSELF_SECONDS),
+        })
+        seg_id += 1
 
         # ── Countdown (silent) ───────────────────────────────────────────
-        # countdown_text = " ".join(str(n) for n in range(cfg.QA_COUNTDOWN_SECONDS, 0, -1))
-        # segments.append({
-        #     "id": seg_id,
-        #     "start": float(seg_id),
-        #     "end": float(seg_id + 1),
-        #     "text": "",
-        #     "display_text": countdown_text,
-        #     "avg_logprob": -0.1,
-        #     "no_speech_prob": 0.01,
-        #     "style": "countdown",
-        #     "is_silent": True,
-        #     "silent_duration": float(cfg.QA_COUNTDOWN_SECONDS),
-        # })
-        # seg_id += 1
+        countdown_text = " ".join(str(n) for n in range(cfg.QA_COUNTDOWN_SECONDS, 0, -1))
+        segments.append({
+            "id": seg_id,
+            "start": float(seg_id),
+            "end": float(seg_id + 1),
+            "text": "",
+            "display_text": countdown_text,
+            "avg_logprob": -0.1,
+            "no_speech_prob": 0.01,
+            "style": "countdown",
+            "is_silent": True,
+            "silent_duration": float(cfg.QA_COUNTDOWN_SECONDS),
+        })
+        seg_id += 1
 
         # ── Answer ───────────────────────────────────────────────────────
         # text       → TTS speaks this (parens stripped)
@@ -163,6 +179,7 @@ def load_qa_file(path: str, cfg) -> list[dict]:
             "no_speech_prob": 0.01,
             "style": "answer",
             "is_answer": True,
+            "q_num": q_num,          # 1-based question number for "Q 1" label
         })
         seg_id += 1
 
