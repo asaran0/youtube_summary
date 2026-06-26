@@ -236,7 +236,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
     })())[0]
 
     # Question number label font — smaller than question font
-    _qnum_fs = max(30, getattr(cfg, "QA_QNUM_FONT_SIZE", int(
+    _qnum_fs = max(20, getattr(cfg, "QA_QNUM_FONT_SIZE", int(
         getattr(cfg, "QA_SLIDE_QUESTION_FONT_SIZE", 52) * 0.55
     )))
     _qnum_font = _load_fonts(font_path, type("_C", (), {
@@ -249,7 +249,7 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
 
     # ── Crawl / ticker overlays (subscribe, hooks, promos) ─────────────────
     from core.overlay_crawl import (make_subscribe_crawl, render_crawl_overlays,
-                                    render_empty_space_overlay)
+                                    render_empty_space_overlay, make_toast_crawls)
     subscribe_secs   = float(getattr(cfg, "QA_SUBSCRIBE_SECS",  5.0))
     subscribe_text   = getattr(cfg, "QA_SUBSCRIBE_TEXT",
                                "Subscribe for Upcoming Q&A Sessions!")
@@ -298,25 +298,44 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
 
     def _get_fade_alpha(t, entry, entry_idx):
         """
-        Return fade alpha 0-255. 255=fully visible, 0=black.
-        Fade in at the very start of each Q slide.
-        Fade out only at the END of the hold (= transition to next Q).
-        Never fade during answer playback — no blink mid-answer.
+        Return fade alpha 0-255 for the black overlay.
+        255 = fully visible (no black), 0 = completely black.
+
+        Uses a smooth "dip to brightness" transition — instead of going fully
+        black between questions (which causes a blink), we do a gentle dip
+        to ~30% black at the midpoint of the transition.  This creates a
+        smooth dissolve-like feel with no hard black flash.
+
+        Timeline per question:
+          v_start ──[fade_in]──> fully bright ──> ... ──[gentle_dip_out]──> v_end
+                                                                            |
+                                                              next entry starts here
+                                                             [gentle_dip_in]──> bright
         """
         if fade_dur <= 0:
             return 255
-        # Fade IN: first fade_dur seconds of each slide.
-        # Skip for the very first question so the video doesn't open black.
+
+        hold = float(getattr(cfg, "QA_POST_ANSWER_HOLD", 1.0))
+
+        # ── Fade OUT: dip at the end of the hold (before next question) ───────
+        fade_out_start = entry["v_end"] - min(fade_dur, hold * 0.8)
+        if t >= fade_out_start and entry_idx < total_pairs - 1:
+            p         = (t - fade_out_start) / max(fade_dur, 0.001)
+            p         = max(0.0, min(1.0, p))
+            # Ease-in: start slow, accelerate into dip. Max dip = 180 (not 0).
+            dip       = int(180 * (p ** 2))   # 255-180=75 → darkens but never full black
+            return max(75, 255 - dip)
+
+        # ── Fade IN: recover from dip at the start of this question ──────────
+        # Skip for first question — starts bright immediately
         since_start = t - entry["v_start"]
         if since_start < fade_dur and entry_idx > 0:
-            return int(255 * since_start / fade_dur)
-        # Fade OUT: only during the final fade_dur of the HOLD period
-        # (i.e. right before the next question appears)
-        hold = float(getattr(cfg, "QA_POST_ANSWER_HOLD", 1.0))
-        fade_out_start = entry["v_end"] - min(fade_dur, hold * 0.8)
-        if t >= fade_out_start:
-            time_left = entry["v_end"] - t
-            return int(255 * max(0.0, time_left / fade_dur))
+            p     = since_start / fade_dur
+            p     = max(0.0, min(1.0, p))
+            # Ease-out: start fast, decelerate into full brightness
+            dip   = int(180 * ((1.0 - p) ** 2))
+            return max(75, 255 - dip)
+
         return 255
 
     def _get_sentence_visible_n(progress, tokens):
@@ -495,6 +514,29 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
             y_frac       = _sub_y_frac,
         )
     ]
+    # Add "try to answer" toast at the start of each question
+    if getattr(cfg, "QA_TRY_TOAST_ENABLED", True):
+        toast_specs = make_toast_crawls(
+            entries       = entries,
+            font          = _sub_font,
+            video_w       = target_w,
+            video_h       = target_h,
+            q_band_h      = q_band_h,
+            prog_bar_h    = prog_bar_h,
+            text          = getattr(cfg, "QA_TRY_TOAST_TEXT",
+                                    "Pause the video and try to answer by yourself first!"),
+            duration      = float(getattr(cfg, "QA_TRY_TOAST_DURATION",   4.0)),
+            style         = getattr(cfg, "QA_TRY_TOAST_STYLE",            "pill"),
+            accent_color  = _parse_color(getattr(cfg, "QA_TRY_TOAST_ACCENT", (245, 200, 66))),
+            bg_color      = _parse_color(getattr(cfg, "QA_TRY_TOAST_BG",     (15, 15, 30))),
+            bg_opacity    = float(getattr(cfg, "QA_TRY_TOAST_OPACITY",    0.88)),
+            max_w_frac    = float(getattr(cfg, "QA_TRY_TOAST_MAX_W",      0.80)),
+            top_offset_px = int(getattr(cfg,   "QA_TRY_TOAST_TOP_OFFSET", 8)),
+            padding_x     = int(getattr(cfg,   "QA_TRY_TOAST_PADDING_X",  40)),
+            padding_y     = int(getattr(cfg,   "QA_TRY_TOAST_PADDING_Y",  20)),
+        )
+        crawl_specs.extend(toast_specs)
+
     # Add hook crawl if configured
     if getattr(cfg, "QA_HOOK_TEXT", ""):
         from core.overlay_crawl import make_hook_crawl

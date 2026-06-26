@@ -233,13 +233,26 @@ CRF            = 23
 
 
 # ── Question number label ─────────────────────────────────────────────────────
-QA_QNUM_FONT_SIZE      = 38          # font size for "Question 1" label above question text
+QA_QNUM_FONT_SIZE      = 34          # font size for "Question N" label — increase to make it bigger
 
 # ── Bottom-of-question-band progress bar ─────────────────────────────────────
 QA_BOT_PROGRESS        = True        # show answer-spoken progress bar at bottom of Q band
 QA_BOT_PROGRESS_HEIGHT = 6           # height in pixels
 QA_BOT_PROGRESS_COLOR  = (245, 200, 66)   # filled portion colour
 QA_BOT_PROGRESS_BG     = (60, 60, 60)     # unfilled portion colour
+
+# ── "Try to answer" toast — shown at the start of each question ──────────────
+QA_TRY_TOAST_ENABLED  = True
+QA_TRY_TOAST_TEXT     = "Pause the video and try to answer by yourself first!"
+QA_TRY_TOAST_STYLE    = "pill"      # "pill" | "neon" | "banner" | "ghost"
+QA_TRY_TOAST_DURATION = 4.0         # seconds the toast stays (from question start)
+QA_TRY_TOAST_ACCENT   = (245, 200, 66)
+QA_TRY_TOAST_BG       = (15, 15, 30)
+QA_TRY_TOAST_OPACITY  = 0.88
+QA_TRY_TOAST_MAX_W    = 0.80        # max width as fraction of video width (for wrapping)
+QA_TRY_TOAST_TOP_OFFSET = 8          # px gap below the top progress/status bar (move down to avoid status bar)
+QA_TRY_TOAST_PADDING_X  = 40         # horizontal padding inside the pill
+QA_TRY_TOAST_PADDING_Y  = 22         # vertical padding — increase if text is clipping top/bottom
 
 # ── Subscribe crawl overlay (slides in during last N seconds) ─────────────────
 QA_SUBSCRIBE_SECS      = 7.0         # show in last N seconds of video

@@ -203,8 +203,14 @@ def _draw_one_crawl(img: Image.Image, t: float, spec: CrawlSpec) -> Image.Image:
 
     def th(fnt=None):
         fnt = fnt or spec.font
-        bb = draw_probe.textbbox((0, 0), "Ag", font=fnt)
-        return bb[3] - bb[1]
+        # Use ascent+descent from getmetrics() so descenders (g,y,p,q)
+        # are fully included — textbbox height often clips them.
+        try:
+            asc, desc = fnt.getmetrics()
+            return asc + abs(desc)
+        except Exception:
+            bb = draw_probe.textbbox((0, 0), "Agpqy|", font=fnt)
+            return bb[3] - bb[1]
 
     icon_l_str = (spec.icon_left  + "  ") if spec.icon_left  else ""
     icon_r_str = ("  " + spec.icon_right) if spec.icon_right else ""
@@ -471,8 +477,8 @@ def render_empty_space_overlay(
     t: float,
     total_dur: float,
     font: ImageFont.FreeTypeFont,
-    text_start: str  = "Try to answer in comments",
-    text_end: str    = "Comment your doubts.",
+    text_start: str  = "Try to Answer",
+    text_end: str    = "In the Comments!",
     fade_in_at: float  = 10.0,   # seconds before end to start fading IN the overlay
     fade_out_at: float =  3.0,   # seconds before end to start fading OUT
     bg_color: Color    = (0, 0, 0),
@@ -585,3 +591,126 @@ def render_empty_space_overlay(
     by      = max(0, min(H - box_h, by))
     base.paste(patch, (bx, by), patch)
     return base.convert("RGB")
+
+
+# ---------------------------------------------------------------------------
+# "Try to answer" toast — one per question, slides in at question start
+# ---------------------------------------------------------------------------
+
+def make_toast_crawls(
+    entries       : list,
+    font          : "ImageFont.FreeTypeFont",
+    video_w       : int,
+    video_h       : int,
+    q_band_h      : int,
+    prog_bar_h    : int,
+    text          : str   = "Pause the video and try to answer by yourself first!",
+    duration      : float = 4.0,
+    style         : str   = "pill",
+    accent_color  : Color = (245, 200, 66),
+    bg_color      : Color = (15,  15,  30),
+    bg_opacity    : float = 0.88,
+    max_w_frac    : float = 0.80,
+    top_offset_px : int   = 8,     # extra px gap below the progress bar / status bar
+    padding_x     : int   = 40,    # horizontal padding inside pill
+    padding_y     : int   = 20,    # vertical padding — increase to avoid text clipping
+) -> list:
+    """
+    Return a list of CrawlSpec objects — one per question entry — each
+    showing a "try to answer" toast at the start of the question phase.
+
+    The toast:
+      - slides in from the left at entry["v_start"]
+      - holds for min(duration, question_phase_duration - 0.6s)
+      - slides out before the answer starts
+      - appears at the same vertical position as the subscribe banner
+        (just below the top progress bar)
+
+    Text is automatically word-wrapped to fit max_w_frac * video_w.
+    Multi-line text is joined with  " · "  so it reads as one flowing line
+    inside the pill (PIL single-text rendering keeps it clean).
+
+    Parameters
+    ----------
+    entries      : list of entry dicts (from runner._run_split_layout)
+    font         : PIL font for the toast text
+    video_w/h    : frame dimensions
+    q_band_h     : pixel height of the question band
+    prog_bar_h   : pixel height of the top progress bar
+    text         : toast message (auto-wrapped)
+    duration     : max seconds the toast is visible
+    style        : CrawlSpec style ("pill" recommended)
+    accent_color : RGB accent colour
+    bg_color     : RGB background colour
+    bg_opacity   : 0-1 opacity
+    max_w_frac   : max pill width fraction of video_w (for wrapping)
+    """
+    # ── Word-wrap the text to fit inside max_w_frac * video_w ────────────────
+    max_text_px = int(video_w * max_w_frac) - 80   # subtract padding
+    probe_img   = Image.new("RGB", (video_w, video_h))
+    probe_draw  = ImageDraw.Draw(probe_img)
+
+    def measure(s):
+        bb = probe_draw.textbbox((0, 0), s, font=font)
+        return bb[2] - bb[0]
+
+    words      = text.split()
+    lines      = []
+    cur_line   = []
+    for word in words:
+        test = " ".join(cur_line + [word])
+        if measure(test) <= max_text_px or not cur_line:
+            cur_line.append(word)
+        else:
+            lines.append(" ".join(cur_line))
+            cur_line = [word]
+    if cur_line:
+        lines.append(" ".join(cur_line))
+
+    # Join lines with  " ·  " separator — keeps it as a single CrawlSpec.text
+    # so the existing single-line pill renderer handles it cleanly.
+    # For genuine multi-line we use sub_text for the second line.
+    main_text = lines[0] if lines else text
+    sub_text  = "  ".join(lines[1:]) if len(lines) > 1 else ""
+
+    # ── Y position: prog_bar_h + top_offset_px + half pill height ───────────
+    # top_offset_px gives a configurable gap below the status/progress bar.
+    # Pill height includes padding_y * 2 so text never clips.
+    line_h_est = max(30, int(font.size * 1.35)) if hasattr(font, 'size') else 44
+    pill_h     = line_h_est + padding_y * 2 + (line_h_est + 6 if sub_text else 0)
+    pill_h     = max(44, pill_h)
+    y_top      = prog_bar_h + top_offset_px          # top edge of pill
+    y_frac     = (y_top + pill_h // 2) / video_h     # centre of pill
+
+    # ── Build one CrawlSpec per entry ─────────────────────────────────────────
+    specs = []
+    for entry in entries:
+        q_start   = entry["v_start"]
+        a_start   = entry["a_start"]
+        q_dur     = max(a_start - q_start, 0.1)
+        # Hold time: toast duration but leave 0.6s for slide-out before answer
+        hold_time = min(duration, q_dur - 0.6)
+        if hold_time <= 0.3:
+            continue   # question phase too short — skip toast
+        end_time  = q_start + hold_time + 0.55   # 0.55s slide-in + hold
+
+        specs.append(CrawlSpec(
+            text         = main_text,
+            sub_text     = sub_text,
+            icon_left    = ">>",
+            icon_right   = "",
+            start_time   = q_start,
+            end_time     = min(end_time, a_start - 0.1),
+            font         = font,
+            y_frac       = y_frac,
+            style        = style,
+            direction    = "ltr",
+            text_color   = (255, 255, 255),
+            accent_color = accent_color,
+            bg_color     = bg_color,
+            bg_opacity   = bg_opacity,
+            padding_x    = padding_x,
+            padding_y    = padding_y,
+            border_w     = 3,
+        ))
+    return specs

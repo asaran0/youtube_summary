@@ -3,13 +3,13 @@ A: Java is a high-level, object-oriented programming language developed by Sun M
 
 Q: Explain the main features of Java.
 A: Key features of Java include:
-Object-oriented
-Platform-independent (via the Java Virtual Machine)
-Simple and easy to learn
-Distributed computing support (via RMI and EJB)
-Multi-threading
-Robust and secure (garbage collection, exception handling, etc.)
-Dynamic and extensible
+- Object-oriented
+- Platform-independent (via the Java Virtual Machine)
+- Simple and easy to learn
+- Distributed computing support (via RMI and EJB)
+- Multi-threading
+- Robust and secure (garbage collection, exception handling, etc.)
+- Dynamic and extensible
 
 Q: What is the difference between == and .equals() in Java?
 A: == is used for comparing primitive data types or checking if two references point to the same object. .equals() is used for comparing the content or values of objects and is usually overridden in custom classes.
@@ -34,3 +34,33 @@ A: The finalize() method is called by the garbage collector before an object is 
 
 Q: Explain the concept of exception handling in Java.
 A: Exception handling uses try, catch, and finally blocks. The try block contains code that may throw an exception, the catch block handles the exception, and the finally block executes whether an exception occurs or not.
+
+Q: What is the super keyword used for in Java?
+A: The super keyword refers to the parent class. It is used to call superclass methods, access superclass fields, or invoke the superclass constructor.
+
+Q: What is the difference between method overloading and method overriding?
+A: Method overloading allows multiple methods with the same name but different parameter lists in the same class. Method overriding allows a subclass to provide its own implementation of a method defined in the superclass.
+
+Q: Explain the static keyword in Java.
+A: The static keyword declares members that belong to the class rather than an object. Static members are shared among all instances and can be accessed using the class name.
+
+Q: What is the purpose of the transient keyword in Java?
+A: The transient keyword prevents a field from being serialized when an object is serialized. It is commonly used for sensitive or temporary data.
+
+Q: What is the this keyword in Java?
+A: The this keyword refers to the current object. It is used to distinguish instance variables from local variables and to invoke constructors or methods of the current class.
+
+Q: Explain the concept of autoboxing and unboxing in Java.
+A: Autoboxing is the automatic conversion of a primitive type into its corresponding wrapper class. Unboxing is the automatic conversion of a wrapper object back to its primitive type.
+
+Q: What is the try-with-resources statement in Java?
+A: The try-with-resources statement automatically closes resources declared in the try statement after execution, even if an exception occurs. Resources must implement the AutoCloseable interface.
+
+Q: Explain the concept of garbage collection in Java.
+A: Garbage collection automatically removes objects that are no longer reachable, freeing memory and preventing memory leaks.
+
+Q: What is the difference between public, private, protected, and default access modifiers in Java?
+A: Public members are accessible from anywhere. Private members are accessible only within the same class. Protected members are accessible within the same package and by subclasses. Default members are accessible only within the same package.
+
+Q: Explain the concept of the Java Naming and Directory Interface (JNDI).
+A: JNDI is an API that provides naming and directory services. It allows Java applications to locate and access resources such as databases, LDAP services, and enterprise objects.
