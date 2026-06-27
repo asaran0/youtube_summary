@@ -103,7 +103,9 @@ def _build_qa_pairs(selected: list[dict], cfg=None) -> list[dict]:
 
                 pairs.append({
                     "question":         question_text,
-                    "q_spoken_words":   question_text.split(),
+                    # q_spoken_words uses the RAW spoken text (no "Question N:" prefix)
+                    # so char-weighted timing matches the actual TTS output.
+                    "q_spoken_words":   seg.get("text", question_text).split(),
                     "q_num":            seg.get("q_num", ans.get("q_num", len(pairs) + 1)),
                     "display_text":     display_text,
                     "spoken_words":     spoken_text.split(),

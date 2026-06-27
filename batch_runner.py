@@ -35,10 +35,11 @@ import batch_config as BC
 #  Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _parse_qa_file(path: str) -> list[tuple[str, str]]:
+def _parse_qa_file(path: str) -> list[tuple[int | None, str, str]]:
     """
-    Parse a Q&A text file into a list of (question, answer) tuples.
-    Handles the ```text ... ``` wrapper that some files have.
+    Parse a Q&A text file into a list of (q_num, question, answer) tuples.
+    q_num is the explicit number from Q46:, Q47: etc., or None if absent.
+    Handles both "Q: ..." and "Q47: ..." formats, and ```text fences.
     """
     with open(path, encoding="utf-8") as f:
         raw = f.read()
@@ -47,15 +48,20 @@ def _parse_qa_file(path: str) -> list[tuple[str, str]]:
     raw = re.sub(r"^```\w*\s*", "", raw.strip())
     raw = re.sub(r"\s*```$", "", raw.strip())
 
-    pattern = re.compile(r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\n\s*Q:|\Z)", re.DOTALL)
-    pairs = pattern.findall(raw)
-    if not pairs:
-        raise ValueError(f"No 'Q: ... A: ...' pairs found in: {path}")
+    # Capture optional question number: Q:, Q1:, Q46:, Q99: all match
+    pattern = re.compile(
+        r"Q(\d*):\s*(.+?)\s*A\d*:\s*(.+?)(?=\n\s*Q\d*:|\Z)",
+        re.DOTALL
+    )
+    matches = pattern.findall(raw)
+    if not matches:
+        raise ValueError(f"No Q:/A: pairs found in: {path}")
 
-    # Normalise whitespace within each field
     return [
-        (" ".join(q.split()), " ".join(a.split()))
-        for q, a in pairs
+        (int(num) if num else None,
+         " ".join(q.split()),
+         " ".join(a.split()))
+        for num, q, a in matches
     ]
 
 
@@ -74,15 +80,16 @@ def _apply_batch_overrides(cfg) -> None:
         cfg.MACOS_TTS_VOICE = BC.MACOS_TTS_VOICE
 
 
-def _build_question_list_text(pairs: list[tuple[str, str]], part: int, total_parts: int) -> str:
+def _build_question_list_text(pairs: list, part: int, total_parts: int) -> str:
     """Return a formatted string listing the questions for a part."""
     lines = [
         f"Part {part} of {total_parts}  —  {len(pairs)} questions\n",
         "Questions covered in this video:",
         "",
     ]
-    for i, (q, _) in enumerate(pairs, start=1):
-        lines.append(f"  {i:2d}. {q}")
+    for i, (num, q, _) in enumerate(pairs, start=1):
+        label = f"Q{num}" if num is not None else f"{i}"
+        lines.append(f"  {label}. {q}")
     return "\n".join(lines)
 
 
@@ -178,6 +185,9 @@ def main() -> None:
     print(f"[batch_runner] {total_q} questions  →  {total_parts} parts  "
           f"({BC.QUESTIONS_PER_PART} questions/part)\n")
 
+    # Detect whether the file uses explicit Q numbers
+    has_explicit_nums = any(num is not None for num, q, a in all_pairs)
+
     # ── Ensure output dir exists ──────────────────────────────────────────
     os.makedirs(BC.OUTPUT_DIR, exist_ok=True)
 
@@ -193,15 +203,20 @@ def main() -> None:
               f"({len(chunk)} questions)")
 
         # Print which questions are in this part
-        for i, (q, _) in enumerate(chunk, start=1):
-            print(f"    Q{i}: {q[:80]}{'…' if len(q)>80 else ''}")
+        for i, (num, q, _) in enumerate(chunk, start=1):
+            label = f"Q{num}" if num is not None else f"Q{i}"
+            print(f"    {label}: {q[:80]}{'…' if len(q)>80 else ''}")
         print()
 
-        # Write chunk to a temp Q&A file
+        # Write chunk to a temp Q&A file.
+        # Use explicit Q number from the file (Q46:, Q47:) when present,
+        # otherwise fall back to the global sequential number.
         temp_qa_path = os.path.join(BC.OUTPUT_DIR, f"_batch_temp_part{part}.txt")
+        global_offset = (part - 1) * BC.QUESTIONS_PER_PART
         with open(temp_qa_path, "w", encoding="utf-8") as f:
-            for q, a in chunk:
-                f.write(f"Q: {q}\nA: {a}\n\n")
+            for local_i, (num, q, a) in enumerate(chunk, start=1):
+                q_num = num if num is not None else (global_offset + local_i)
+                f.write(f"Q{q_num}: {q}\nA: {a}\n\n")
 
         # Apply overrides fresh for each part (runner may mutate cfg)
         importlib.reload(qa_cfg)

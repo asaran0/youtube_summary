@@ -147,6 +147,7 @@ class CrawlSpec:
     padding_x    : int   = 32
     padding_y    : int   = 14
     border_w     : int   = 3
+    slide_dur    : float = 0.55  # slide animation duration (seconds)
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +190,18 @@ def _ease_out_cubic(x: float) -> float:
 
 def _ease_in_cubic(x: float) -> float:
     return x ** 3
+
+
+def _ease_out_sine(x: float) -> float:
+    """Gentle sine ease-out — smoother than cubic for slide-in."""
+    import math
+    return math.sin(x * math.pi / 2)
+
+
+def _ease_in_sine(x: float) -> float:
+    """Gentle sine ease-in — smoother than cubic for slide-out."""
+    import math
+    return 1.0 - math.cos(x * math.pi / 2)
 
 
 def _draw_one_crawl(img: Image.Image, t: float, spec: CrawlSpec) -> Image.Image:
@@ -235,7 +248,10 @@ def _draw_one_crawl(img: Image.Image, t: float, spec: CrawlSpec) -> Image.Image:
     # ── Animation timing ─────────────────────────────────────────────────────
     total_dur  = max(spec.end_time - spec.start_time, 0.001)
     elapsed    = t - spec.start_time
-    slide_dur  = 0.0 if spec.hold_only else min(0.55, total_dur * 0.25)
+    # Use per-spec slide_dur if set, else default cap of 0.55s
+    slide_dur  = 0.0 if spec.hold_only else min(
+        getattr(spec, "slide_dur", 0.55), total_dur * 0.45
+    )
 
     # X positions: off-screen left and right
     if spec.style == "banner":
@@ -250,13 +266,13 @@ def _draw_one_crawl(img: Image.Image, t: float, spec: CrawlSpec) -> Image.Image:
     enter_from = off_left  if spec.direction == "ltr" else off_right
     exit_to    = off_right if spec.direction == "ltr" else off_left
 
-    if elapsed < slide_dur:                     # slide in
-        p   = _ease_out_cubic(elapsed / slide_dur)
+    if elapsed < slide_dur:                     # slide in — smooth sine ease
+        p   = _ease_out_sine(elapsed / slide_dur)
         x   = int(enter_from + (target_x - enter_from) * p)
-    elif elapsed > total_dur - slide_dur:       # slide out
-        p   = _ease_in_cubic((elapsed - (total_dur - slide_dur)) / slide_dur)
+    elif elapsed > total_dur - slide_dur:       # slide out — smooth sine ease
+        p   = _ease_in_sine((elapsed - (total_dur - slide_dur)) / slide_dur)
         x   = int(target_x + (exit_to - target_x) * p)
-    else:                                       # hold
+    else:                                       # hold — fully visible
         x   = target_x
 
     y = int(H * spec.y_frac - box_h / 2)
@@ -472,40 +488,130 @@ def make_hook_crawl(
 # Empty-space smooth transition overlay
 # ---------------------------------------------------------------------------
 
-# ── Emoji → ASCII symbol map (PIL fonts don't render emoji glyphs) ────────────
-_EMOJI_MAP = {
-    "💬": "[>]", "👍": "[+]", "❤️": "<3", "📤": "^",
-    "🔔": "(i)", "🎯": "*",  "✅": "[v]", "🔥": "!",
-    "⭐": "*",   "🙏": "/\\", "👇": "v",  "💡": "!",
-    "🎉": ">>",  "🏆": "[*]", "📌": ">",  "🚀": ">>",
-}
 
-def _clean_text(text: str) -> str:
-    """Replace emoji with ASCII symbols and strip leftover variation selectors."""
-    import re
-    for emoji, sym in _EMOJI_MAP.items():
-        text = text.replace(emoji, sym)
-    # Remove any remaining emoji / variation selectors not in map
-    text = re.sub(r"[𐀀-􏿿]", "", text)  # supplemental planes
-    text = re.sub(r"️", "", text)                    # variation selector-16
-    return text.strip()
+import re as _re
+
+# ── Emoji rendering ───────────────────────────────────────────────────────────
+# PIL regular fonts cannot render colour emoji. We detect emoji tokens and
+# render them separately using NotoColorEmoji (Linux) or Apple Color Emoji
+# (macOS), scaled to match the text height, then composite inline.
+
+_EMOJI_FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+    "/usr/share/fonts/noto/NotoColorEmoji.ttf",
+    "/System/Library/Fonts/Apple Color Emoji.ttc",
+    "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttc",
+]
+_EMOJI_FONT_PATH = next(
+    (p for p in _EMOJI_FONT_CANDIDATES if __import__("os").path.exists(p)), None
+)
+_EMOJI_RENDER_SIZE = 109   # NotoColorEmoji only supports this bitmap size
+_emoji_font_obj    = None
+
+def _get_emoji_font():
+    global _emoji_font_obj
+    if _emoji_font_obj is None and _EMOJI_FONT_PATH:
+        try:
+            _emoji_font_obj = ImageFont.truetype(_EMOJI_FONT_PATH, _EMOJI_RENDER_SIZE)
+        except Exception:
+            _emoji_font_obj = False   # mark as unavailable
+    return _emoji_font_obj if _emoji_font_obj else None
+
+# Match emoji sequences (most common planes)
+_EMOJI_RE = _re.compile(
+    r"(?:[🀀-🿿]|[☀-➿]|‍|[️⃣])+",
+    _re.UNICODE,
+)
+
+def _tokenise(text: str) -> list:
+    """Split into [(token, is_emoji), ...] pairs."""
+    tokens, last = [], 0
+    for m in _EMOJI_RE.finditer(text):
+        if m.start() > last:
+            tokens.append((text[last:m.start()], False))
+        tokens.append((m.group(), True))
+        last = m.end()
+    if last < len(text):
+        tokens.append((text[last:], False))
+    return tokens
 
 
-def _wrap_text_lines(text: str, font, max_w: int) -> list[str]:
-    """Word-wrap text to fit max_w pixels. Returns list of line strings."""
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    words = text.split()
+def _token_width(tok: str, is_emoji: bool, font, emoji_font, target_h: int) -> int:
+    """Pixel width of one token rendered at target_h."""
+    dummy = ImageDraw.Draw(Image.new("RGBA" if is_emoji else "RGB", (1, 1)))
+    if is_emoji and emoji_font:
+        bb    = dummy.textbbox((0, 0), tok, font=emoji_font, embedded_color=True)
+        raw_h = max(1, bb[3] - bb[1])
+        raw_w = max(1, bb[2] - bb[0])
+        return max(1, int(raw_w * target_h / raw_h))
+    bb = dummy.textbbox((0, 0), tok, font=font)
+    return bb[2] - bb[0]
+
+
+def _wrap_mixed(text: str, font, max_w: int, target_h: int) -> list:
+    """Word-wrap mixed text+emoji into lines that fit max_w pixels."""
+    emoji_font = _get_emoji_font()
+    words      = text.split()
     lines, cur = [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        bb = probe.textbbox((0, 0), trial, font=font)
-        if cur and (bb[2] - bb[0]) > max_w:
+    for word in words:
+        trial = (cur + " " + word).strip()
+        w = sum(_token_width(t, e, font, emoji_font, target_h)
+                for t, e in _tokenise(trial))
+        if cur and w > max_w:
             lines.append(cur)
-            cur = w
+            cur = word
         else:
             cur = trial
     if cur:
         lines.append(cur)
+    return lines or [""]
+
+
+def _draw_mixed_line(patch: Image.Image, line: str, font,
+                     x: int, y: int, fill: tuple, target_h: int) -> int:
+    """Draw one mixed text+emoji line on RGBA patch. Returns width drawn."""
+    emoji_font = _get_emoji_font()
+    draw       = ImageDraw.Draw(patch)
+    cx         = x
+    for token, is_emoji in _tokenise(line):
+        if not token:
+            continue
+        if is_emoji and emoji_font:
+            # Render emoji at native size into tiny RGBA surface
+            bb    = ImageDraw.Draw(Image.new("RGBA",(1,1))).textbbox(
+                        (0,0), token, font=emoji_font, embedded_color=True)
+            raw_w = max(1, bb[2]-bb[0]); raw_h = max(1, bb[3]-bb[1])
+            em    = Image.new("RGBA", (raw_w+4, raw_h+4), (0,0,0,0))
+            ImageDraw.Draw(em).text((-bb[0]+2, -bb[1]+2), token,
+                                    font=emoji_font, embedded_color=True)
+            # Scale to target_h
+            nw = max(1, int(raw_w * target_h / raw_h))
+            em = em.resize((nw, target_h), Image.LANCZOS)
+            # Apply opacity from fill alpha
+            if len(fill) > 3 and fill[3] < 255:
+                r,g,b,a = em.split()
+                a = a.point(lambda p: int(p * fill[3] / 255))
+                em = Image.merge("RGBA",(r,g,b,a))
+            patch.paste(em, (cx, y), em)
+            cx += nw + 3
+        else:
+            draw.text((cx, y), token, font=font, fill=fill)
+            bb = draw.textbbox((0,0), token, font=font)
+            cx += bb[2]-bb[0]
+    return cx - x
+
+
+def _wrap_text_lines(text: str, font, max_w: int) -> list:
+    """Plain text word-wrap (no emoji). Kept for backward compat."""
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    words = text.split(); lines, cur = [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if cur and probe.textbbox((0,0), trial, font=font)[2] > max_w:
+            lines.append(cur); cur = w
+        else:
+            cur = trial
+    if cur: lines.append(cur)
     return lines or [""]
 
 
@@ -514,103 +620,95 @@ def render_empty_space_overlay(
     t: float,
     total_dur: float,
     font: ImageFont.FreeTypeFont,
-    text_start: str  = "Try to Answer",
-    text_end: str    = "In the Comments!",
+    text_start: str   = "Try to Answer",
+    text_end: str     = "In the Comments!",
     fade_in_at: float  = 10.0,
     fade_out_at: float =  3.0,
     bg_color: Color    = (0, 0, 0),
     text_color: Color  = (255, 255, 255),
     accent_color: Color= (245, 200, 66),
-    y_frac: float      = 0.8,
+    y_frac: float      = 0.80,
     max_opacity: float = 0.55,
 ) -> Image.Image:
     """
-    Smooth semi-transparent text overlay near the end of the video.
-    Supports multi-line word-wrap and emoji → ASCII symbol conversion
-    (PIL fonts don't render emoji glyphs natively).
-    No underline — clean pill with text only.
+    Smooth semi-transparent overlay near end of video.
+    Supports multi-line word-wrap and real emoji rendering
+    (via NotoColorEmoji / Apple Color Emoji). No underline.
     """
     time_left = total_dur - t
     if time_left > fade_in_at:
         return img
 
     if time_left > fade_out_at:
-        progress = 1.0 - (time_left - fade_out_at) / (fade_in_at - fade_out_at)
-        opacity  = max_opacity * _ease_out_cubic(max(0.0, min(1.0, progress)))
-        label    = text_start
+        p       = 1.0 - (time_left - fade_out_at) / (fade_in_at - fade_out_at)
+        opacity = max_opacity * _ease_out_cubic(max(0.0, min(1.0, p)))
+        label   = text_start
     else:
-        progress = time_left / fade_out_at
-        opacity  = max_opacity * _ease_out_cubic(max(0.0, min(1.0, progress)))
-        label    = text_end
+        p       = time_left / fade_out_at
+        opacity = max_opacity * _ease_out_cubic(max(0.0, min(1.0, p)))
+        label   = text_end
 
     if opacity < 0.01:
         return img
 
-    # Clean emoji → ASCII, then word-wrap to 80% of frame width
-    W, H    = img.size
-    label   = _clean_text(label)
-    max_w   = int(W * 0.82) - 80   # subtract padding
-    lines   = _wrap_text_lines(label, font, max_w)
+    W, H   = img.size
+    alpha  = int(255 * opacity)
+    pad_x  = 44
+    pad_y  = 24
 
-    alpha   = int(255 * opacity)
-    pad_x   = 44
-    pad_y   = 22
-
-    # Measure all lines
-    probe   = ImageDraw.Draw(img)
+    # Font height for emoji scaling
     try:
         asc, desc = font.getmetrics()
-        lh = asc + abs(desc) + 8
+        lh = asc + abs(desc)
     except Exception:
-        bb = probe.textbbox((0, 0), "Ag", font=font)
-        lh = (bb[3] - bb[1]) + 8
+        lh = ImageDraw.Draw(img).textbbox((0,0),"Ag",font=font)[3]
 
-    max_line_w = max(
-        probe.textbbox((0, 0), ln, font=font)[2] for ln in lines
-    )
-    box_w   = max_line_w + pad_x * 2
-    box_h   = lh * len(lines) + pad_y * 2
+    # Word-wrap with emoji-aware measurement
+    max_w = int(W * 0.84) - pad_x * 2
+    lines = _wrap_mixed(label, font, max_w, lh)
 
-    cx  = W // 2
-    cy  = int(H * y_frac)
-    bx  = max(0, min(W - box_w, cx - box_w // 2))
-    by  = max(0, min(H - box_h, cy - box_h // 2))
+    # Measure each line width for box sizing
+    emoji_font = _get_emoji_font()
+    line_widths = [
+        sum(_token_width(t, e, font, emoji_font, lh)
+            for t, e in _tokenise(ln))
+        for ln in lines
+    ]
+    box_w  = max(line_widths) + pad_x * 2
+    line_gap = 8
+    box_h  = lh * len(lines) + line_gap * (len(lines)-1) + pad_y * 2
 
-    patch = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
-    pd    = ImageDraw.Draw(patch)
+    cx = W // 2
+    cy = int(H * y_frac)
+    bx = max(0, min(W - box_w, cx - box_w // 2))
+    by = max(0, min(H - box_h, cy - box_h // 2))
 
-    # Rounded pill background — no underline, no accent line
-    radius = min(box_h // 2, 36)
-    pd.rounded_rectangle(
-        [0, 0, box_w - 1, box_h - 1],
-        radius=radius,
-        fill=(*bg_color[:3], alpha),
-    )
-    # Thin accent border instead of underline
-    pd.rounded_rectangle(
-        [0, 0, box_w - 1, box_h - 1],
-        radius=radius,
-        outline=(*accent_color[:3], min(255, alpha + 40)),
-        width=2,
-    )
+    patch  = Image.new("RGBA", (box_w, box_h), (0,0,0,0))
+    pd     = ImageDraw.Draw(patch)
+
+    # Rounded pill — no underline, accent border only
+    radius = min(box_h // 2, 40)
+    pd.rounded_rectangle([0, 0, box_w-1, box_h-1], radius=radius,
+                          fill=(*bg_color[:3], alpha))
+    pd.rounded_rectangle([0, 0, box_w-1, box_h-1], radius=radius,
+                          outline=(*accent_color[:3], min(255, alpha+40)), width=2)
 
     # Draw each line centred in the pill
-    for i, line in enumerate(lines):
-        lw  = probe.textbbox((0, 0), line, font=font)[2]
-        lx  = (box_w - lw) // 2
-        ly  = pad_y + i * lh
-        # Subtle shadow
-        pd.text((lx + 1, ly + 1), line, font=font,
-                fill=(*bg_color[:3], min(255, alpha + 50)))
-        pd.text((lx, ly), line, font=font,
-                fill=(*text_color[:3], min(255, alpha + 80)))
+    for i, (line, lw) in enumerate(zip(lines, line_widths)):
+        lx = (box_w - lw) // 2
+        ly = pad_y + i * (lh + line_gap)
+        # Subtle shadow (text only, not emoji)
+        _draw_mixed_line(patch, line, font, lx+1, ly+1,
+                         (*bg_color[:3], min(255, alpha+40)), lh)
+        # Main text + emoji
+        _draw_mixed_line(patch, line, font, lx, ly,
+                         (*text_color[:3], min(255, alpha+80)), lh)
 
     base = img.convert("RGBA")
     bx   = max(0, min(W - box_w, bx))
-    by      = max(0, min(H - box_h, by))
+    by   = max(0, min(H - box_h, by))
     base.paste(patch, (bx, by), patch)
     return base.convert("RGB")
-
 
 # ---------------------------------------------------------------------------
 # "Try to answer" toast — one per question, slides in at question start
@@ -702,30 +800,31 @@ def make_toast_crawls(
     y_frac     = (y_top + pill_h // 2) / video_h     # centre of pill
 
     # ── Build one CrawlSpec per entry ─────────────────────────────────────────
+    # slide_dur: how long the slide-in / slide-out animation takes.
+    # Slower = smoother, more cinematic feel.
+    slide_dur = 1.1    # 1.1s slide in, 1.1s slide out
+
     specs = []
     for entry in entries:
-        q_start   = entry["v_start"]
-        a_start   = entry["a_start"]
-        q_dur     = max(a_start - q_start, 0.1)
+        q_start      = entry["v_start"]
+        a_start      = entry["a_start"]
+        q_dur        = max(a_start - q_start, 0.001)
+        q_words      = entry.get("q_spoken_words", [])
 
-        # Toast appears AFTER the question is spoken — in the tail of the
-        # question phase, not at the very start.
-        # We start it when ~80% of question phase has elapsed (question nearly done),
-        # leaving 0.55s for slide-in and `duration` seconds of hold before answer.
-        slide_dur   = 0.55
-        toast_end   = a_start - 0.1          # always gone before answer starts
+        # Toast starts right when the question begins — the 1.1s sine slide-in
+        # means it arrives smoothly as the first words are being spoken.
+        # It disappears 0.15s before the answer starts.
+        toast_start = q_start
+        toast_end   = a_start - 0.15
 
-        # How much time is available for the toast?
-        # Use at most `duration` but shrink gracefully if question phase is short.
-        available   = toast_end - (q_start + q_dur * 0.75) - slide_dur
-        actual_dur  = max(0.8, min(duration, available))   # min 0.8s, max `duration`
-
-        toast_start = toast_end - actual_dur - slide_dur
-        toast_start = max(q_start + 0.2, toast_start)      # never before question starts
+        # Shrink duration to fit if question phase is very short
+        available   = toast_end - toast_start - slide_dur
+        actual_dur  = max(0.5, min(duration, available))
+        toast_end   = min(toast_end, toast_start + slide_dur + actual_dur)
 
         hold_time   = toast_end - toast_start - slide_dur
-        if hold_time <= 0.15 or toast_start >= toast_end:
-            continue   # genuinely no room — skip
+        if hold_time <= 0.0 or toast_end <= toast_start:
+            continue   # question phase genuinely too short — skip
 
         specs.append(CrawlSpec(
             text         = main_text,
@@ -745,5 +844,6 @@ def make_toast_crawls(
             padding_x    = padding_x,
             padding_y    = padding_y,
             border_w     = 3,
+            slide_dur    = slide_dur,   # use the slow 1.1s slide
         ))
     return specs
