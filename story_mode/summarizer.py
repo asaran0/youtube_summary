@@ -47,7 +47,7 @@ def select_segments(segments: list[dict], total_duration: float, cfg) -> dict:
     if not segments:
         raise ValueError("No segments provided to summarizer")
 
-    chunks = _group_segments(segments)
+    chunks = [_make_chunk([seg]) for seg in segments]
     log.info("Grouped %d segments → %d chunks", len(segments), len(chunks))
 
     idf = _compute_idf(chunks)
