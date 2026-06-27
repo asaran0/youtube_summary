@@ -39,36 +39,77 @@ OUTPUT_FPS = 30
 # "macos" configurable installed system voices, zero setup.
 TTS_BACKEND = "kokoro"
 
+# ── Voice gender — applies across every backend below ─────────
+# Switch once here instead of hunting through each backend's settings.
+STORY_VOICE_GENDER = "male"   # "male" or "female"
+
 # ── Kokoro TTS settings for story mode ───────────────────────────────────────
 # Slower speed makes narration feel more emotional and human.
 # 0.82 = ~18% slower than natural — warm storytelling pace.
-KOKORO_SPEED = 0.82
+KOKORO_SPEED = 0.92
 
-# Voice selection — change to switch gender or style.
+# Voice options per language/gender — change STORY_VOICE_GENDER above to switch.
 # English male options : am_adam (deep) | am_michael (warm) | am_onyx (rich)
 # English female opts  : af_heart (emotive★) | af_bella | af_nicole
 # British male         : bm_george | bm_lewis
 # Hindi male           : hm_omega★ | hm_psi
 # Hindi female         : hf_alpha★ | hf_beta
-KOKORO_VOICES = {
-    "en":  "am_adam",    # ← deep male English narrator (change to "af_heart" for female)
-    "hi":  "hm_omega",   # ← Hindi male narrator       (change to "hf_alpha" for female)
-    "hig": "hm_omega",
+_KOKORO_VOICES_BY_GENDER = {
+    "male":   {"en": "am_adam",  "hi": "hm_omega", "hig": "hm_omega"},
+    "female": {"en": "af_heart", "hi": "hf_alpha", "hig": "hf_alpha"},
 }
+KOKORO_VOICES = _KOKORO_VOICES_BY_GENDER.get(STORY_VOICE_GENDER, _KOKORO_VOICES_BY_GENDER["male"])
+
+# ── Indic Parler-TTS — alternative backend, often more natural than XTTS for
+# Hindi without needing a voice-cloning sample. Tone/emotion is steered with
+# a plain-English description prompt instead. To try it:
+#   TTS_BACKEND = "indic_parler"
+# Tune the description below per story genre (romantic/thriller/motivational).
+_INDIC_PARLER_DESCRIPTIONS_BY_GENDER = {
+    "male": (
+        "A male speaker tells an emotional, slightly slow and reflective Hindi "
+        "story in a warm, intimate voice, with natural pauses between sentences "
+        "and gentle emphasis on emotional words. The recording is of very high "
+        "quality, with no background noise."
+    ),
+    "female": (
+        "A female speaker tells an emotional, slightly slow and reflective Hindi "
+        "story in a warm, expressive voice, with natural pauses between sentences "
+        "and gentle emphasis on emotional words. The recording is of very high "
+        "quality, with no background noise."
+    ),
+}
+INDIC_PARLER_DESCRIPTION = _INDIC_PARLER_DESCRIPTIONS_BY_GENDER.get(
+    STORY_VOICE_GENDER, _INDIC_PARLER_DESCRIPTIONS_BY_GENDER["male"]
+)
 
 # Sentence fade-in/out duration in seconds
 STORY_SENTENCE_FADE = 0.22
 
-XTTS_VOICE_SAMPLE = "assets/clean_voice_story.wav"
-
-MACOS_TTS_VOICE = "Lekha"
-MACOS_TTS_VOICES = {
-    "hi": "Lekha",
-    "hig": "Lekha",
-    "en": "Samantha",
+# ── XTTS voice-cloning sample per gender — record/provide a ~10-30s clean
+# WAV for each gender you want to use. Falls back to the male sample if a
+# female one hasn't been recorded yet, so this is safe to leave as-is.
+_XTTS_VOICE_SAMPLES_BY_GENDER = {
+    "male":   "assets/clean_voice_story.wav",
+    "female": "assets/clean_voice_story_female.wav",
 }
+XTTS_VOICE_SAMPLE = _XTTS_VOICE_SAMPLES_BY_GENDER.get(STORY_VOICE_GENDER, _XTTS_VOICE_SAMPLES_BY_GENDER["male"])
+if not os.path.exists(XTTS_VOICE_SAMPLE):
+    XTTS_VOICE_SAMPLE = _XTTS_VOICE_SAMPLES_BY_GENDER["male"]
+
+_MACOS_TTS_VOICES_BY_GENDER = {
+    # macOS Hindi voices: Lekha (female) is the common built-in; a male Hindi
+    # system voice isn't reliably installed by default — using Samantha/Daniel
+    # (English) is the practical fallback if you pick "male" + macOS backend
+    # without a real Hindi male system voice installed.
+    "male":   {"hi": "Lekha", "hig": "Lekha", "en": "Daniel"},
+    "female": {"hi": "Lekha", "hig": "Lekha", "en": "Samantha"},
+}
+MACOS_TTS_VOICES = _MACOS_TTS_VOICES_BY_GENDER.get(STORY_VOICE_GENDER, _MACOS_TTS_VOICES_BY_GENDER["male"])
+MACOS_TTS_VOICE = MACOS_TTS_VOICES.get(LANGUAGE, "Lekha")
 MACOS_TTS_RATE = 125
-TTS_PAUSE_BETWEEN_SEGMENTS = 0.75
+TTS_PAUSE_BETWEEN_SEGMENTS = 0.45   # base gap between sentences (was 0.75 — felt like too many stops)
+TTS_PAUSE_VARY_BY_PUNCTUATION = True  # shorter gap after plain '।', longer after '...'/'?'/'!'
 TTS_PAUSE_BETWEEN_PHRASES = 0.30
 TTS_ANSWER_PAUSE_EXTRA = 0.0   # story mode has no Q&A pacing concept
 
@@ -219,6 +260,13 @@ STORY_WAVEFORM_BARS         = 40    # number of animated bars
 STORY_WAVEFORM_HEIGHT_RATIO = 0.09  # fraction of video height
 STORY_WAVEFORM_COLOR        = None  # None = use palette accent colour
 STORY_WAVEFORM_BG_ALPHA     = 70    # strip transparency (0=invisible, 255=solid)
+
+# ── Background music (optional, ducked under narration) ───────
+# Point this at a local royalty-free music file (mp3/wav) to add ambience.
+# Leave as None to render with narration + waveform only (current behaviour).
+STORY_BG_MUSIC              = None   # e.g. "assets/music/cinematic_loop.mp3"
+STORY_BG_MUSIC_VOLUME_DB    = -22    # music level before ducking (negative = quieter)
+STORY_BG_MUSIC_DUCK         = True   # auto-lower music under narration via sidechain compression
 
 # Use new story renderer instead of legacy subtitle-overlay approach
 STORY_USE_NEW_RENDERER   = True

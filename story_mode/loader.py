@@ -22,7 +22,20 @@ def load_text_file(path: str) -> list[dict]:
         raw = f.read()
 
     raw = re.sub(r"\[\d{2}:\d{2}:\d{2}[^\]]*\]", "", raw)
-    sentences = re.split(r"(?<=[।.?!])\s+", raw.strip())
+    # Split on sentence-ending punctuation, optionally followed by a closing
+    # quote/bracket (e.g. dialogue like "...।""), without losing that quote.
+    parts = re.split(r'([।.?!]["\'\u201d\u2019)]?)\s+', raw.strip())
+    sentences = []
+    buf = ""
+    for i, part in enumerate(parts):
+        if i % 2 == 1:  # this part is a captured terminator -> attach and close
+            buf += part
+            sentences.append(buf)
+            buf = ""
+        else:
+            buf += part
+    if buf.strip():
+        sentences.append(buf)
     sentences = [s.strip() for s in sentences if s.strip()]
 
     if not sentences:

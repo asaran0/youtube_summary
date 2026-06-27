@@ -54,6 +54,14 @@ _LATIN_CANDIDATES = [
 ]
 
 
+def _detect_script(text: str) -> str:
+    """Return 'hi' if text contains any Devanagari characters, else 'en'."""
+    for ch in text:
+        if "\u0900" <= ch <= "\u097F":
+            return "hi"
+    return "en"
+
+
 def _load_font(size: int, lang: str, hint: str = None) -> ImageFont.FreeTypeFont:
     candidates = []
     if hint and os.path.exists(hint):
@@ -190,32 +198,45 @@ def _waveform_loop_path(accent: tuple, video_w: int, video_h: int,
     strip_h    = bar_zone_h + 16
     strip_y0   = bar_zone_y - 8
 
-    for fi in range(n_frames):
-        t     = fi / fps
-        frame = Image.new("RGB", (video_w, video_h), (0, 0, 0))
+    try:
+        for fi in range(n_frames):
+            t     = fi / fps
+            frame = Image.new("RGB", (video_w, video_h), (0, 0, 0))
 
-        # Semi-transparent strip background
-        strip  = Image.new("RGBA", (video_w, strip_h), (0, 0, 0, bg_alpha))
-        region = frame.crop((0, strip_y0, video_w, strip_y0 + strip_h)).convert("RGBA")
-        frame.paste(Image.alpha_composite(region, strip).convert("RGB"), (0, strip_y0))
-        draw = ImageDraw.Draw(frame)
+            # Semi-transparent strip background
+            strip  = Image.new("RGBA", (video_w, strip_h), (0, 0, 0, bg_alpha))
+            region = frame.crop((0, strip_y0, video_w, strip_y0 + strip_h)).convert("RGBA")
+            frame.paste(Image.alpha_composite(region, strip).convert("RGB"), (0, strip_y0))
+            draw = ImageDraw.Draw(frame)
 
-        for i in range(n_bars):
-            amp = (0.45
-                   + 0.40 * math.sin(2 * math.pi * freqs[i] * t + phases[i])
-                   + 0.15 * math.sin(2 * math.pi * freqs[i] * 2.3 * t + phases[i] * 1.7))
-            amp    = max(0.05, min(1.0, amp))
-            bh_px  = max(4, int(amp * bar_zone_h))
-            x      = start_x + i * (bar_w + gap)
-            bright = 0.6 + 0.4 * amp
-            color  = tuple(min(255, int(c * bright)) for c in bar_color)
-            draw.rectangle([x, bar_zone_y + bar_zone_h - bh_px,
-                            x + bar_w - 1, bar_zone_y + bar_zone_h], fill=color)
+            for i in range(n_bars):
+                amp = (0.45
+                       + 0.40 * math.sin(2 * math.pi * freqs[i] * t + phases[i])
+                       + 0.15 * math.sin(2 * math.pi * freqs[i] * 2.3 * t + phases[i] * 1.7))
+                amp    = max(0.05, min(1.0, amp))
+                bh_px  = max(4, int(amp * bar_zone_h))
+                x      = start_x + i * (bar_w + gap)
+                bright = 0.6 + 0.4 * amp
+                color  = tuple(min(255, int(c * bright)) for c in bar_color)
+                draw.rectangle([x, bar_zone_y + bar_zone_h - bh_px,
+                                x + bar_w - 1, bar_zone_y + bar_zone_h], fill=color)
 
-        proc.stdin.write(frame.tobytes())
+            proc.stdin.write(frame.tobytes())
+    except (BrokenPipeError, OSError) as e:
+        proc.stdin.close()
+        proc.wait()
+        if os.path.exists(path):
+            os.remove(path)
+        raise RuntimeError(f"ffmpeg exited while writing waveform frames: {e}") from e
 
     proc.stdin.close()
     proc.wait()
+    if proc.returncode != 0 or not os.path.exists(path):
+        if os.path.exists(path):
+            os.remove(path)
+        raise RuntimeError(
+            f"ffmpeg failed to produce waveform loop (exit code {proc.returncode})."
+        )
     log.info("Waveform loop ready → %s", path)
     return path
 
@@ -231,8 +252,8 @@ def _get_badge_patch(text: str, font_path: str, cfg, accent: tuple,
         return _badge_cache[key]
 
     size    = getattr(cfg, "STORY_LOGO_FONT_SIZE", 30)
-    lang    = getattr(cfg, "LANGUAGE", "hi")
-    font    = _load_font(size, lang, font_path)
+    lang    = _detect_script(text)
+    font    = _load_font(size, lang, font_path if lang == "hi" else None)
     padding = 16
     margin  = 20
 
@@ -282,16 +303,21 @@ def _render_sentence_frame(
     stroke_w: int,
     center_y: int,
     fade_alpha: float = 1.0,   # 0.0 = invisible, 1.0 = fully opaque
+    pop_progress: float = 1.0,  # 0.0 = word just appeared, 1.0 = settled
 ) -> Image.Image:
     """
-    Render one sentence frame. Only the current sentence is shown —
-    centred on screen, word-by-word highlight, with fade alpha applied.
+    Render one sentence frame. Words are revealed progressively as they're
+    spoken; the currently-active word pops in with a small upward bounce
+    and a brightness flash that settles to the normal highlight colour.
     """
     img  = bg.copy()
     draw = ImageDraw.Draw(img)
     lh   = _line_h(font) + 14
     total_h = len(lines) * lh
     y = center_y - total_h // 2
+
+    pop_progress = max(0.0, min(1.0, pop_progress))
+    pop_ease = _ease_out(pop_progress)
 
     word_cursor = 0
     for line in lines:
@@ -308,9 +334,17 @@ def _render_sentence_frame(
             is_active = (active_word >= 0 and word_cursor == active_word)
             col = highlight_color if is_active else text_color
 
+            word_y = y
+            if is_active:
+                # Brightness flash: start near-white, settle to highlight colour
+                flash_col = tuple(min(255, int(highlight_color[i] * 0.5 + 255 * 0.5)) for i in range(3))
+                col = tuple(int(flash_col[i] * (1.0 - pop_ease) + highlight_color[i] * pop_ease)
+                            for i in range(3))
+                # Upward bounce that settles into place
+                word_y = y - int(6 * (1.0 - pop_ease))
+
             # Apply fade by blending toward the background colour
             if fade_alpha < 1.0:
-                # Sample background colour at word position (approximate)
                 bg_sample = bg.getpixel((min(x, bg.width - 1),
                                           min(y + lh // 2, bg.height - 1)))
                 col = tuple(int(col[i] * fade_alpha + bg_sample[i] * (1.0 - fade_alpha))
@@ -321,13 +355,8 @@ def _render_sentence_frame(
                 sc = stroke_color
 
             ww = _text_w(draw, word, font)
-            # Stroke
-            for dx in range(-stroke_w, stroke_w + 1):
-                for dy in range(-stroke_w, stroke_w + 1):
-                    if dx == 0 and dy == 0:
-                        continue
-                    draw.text((x + dx, y + dy), word, font=font, fill=sc)
-            draw.text((x, y), word, font=font, fill=col)
+            draw.text((x, word_y), word, font=font, fill=col,
+                       stroke_width=stroke_w, stroke_fill=sc)
             x += ww + _text_w(draw, " ", font)
             word_cursor += 1
         y += lh
@@ -384,21 +413,26 @@ def compile_story_video(
 
         palette = PALETTES[idx % len(PALETTES)]
         bg      = _gradient_bg(video_width, video_height, palette[0], palette[1])
-        lines   = _wrap(text, font, max_text_w, dummy_draw)
         words   = text.split()
 
-        # Pre-cache wrapped lines for every possible visible word count
-        # (avoids re-wrapping on every frame — huge speedup)
-        wrap_cache = {}
-        for n in range(1, len(words) + 1):
-            wrap_cache[n] = _wrap(" ".join(words[:n]), font, max_text_w, dummy_draw)
-        wrap_cache[0] = [""]
+        # Incremental wrap cache: wrap_cache[n] = wrapped lines using only
+        # the first n words. O(n) total (one _wrap call per word count),
+        # safe because each chunk is now exactly one sentence.
+        wrap_cache = {0: [""]}
+        cur_lines, cur_line = [], ""
+        for n, w in enumerate(words, start=1):
+            trial = (cur_line + " " + w).strip()
+            if cur_line and _text_w(dummy_draw, trial, font) > max_text_w:
+                cur_lines.append(cur_line)
+                cur_line = w
+            else:
+                cur_line = trial
+            wrap_cache[n] = cur_lines + [cur_line]
 
         chunks.append({
             "t_start":    t_start,
             "t_end":      t_end,
             "bg":         bg,
-            "lines":      lines,
             "words":      words,
             "n_words":    len(words),
             "accent":     palette[2],
@@ -443,30 +477,37 @@ def compile_story_video(
 
         # ── Active word via char-weighted timing ──────────────────────────
         n_words = chunk["n_words"]
+        pop_progress = 1.0  # how far the active word's pop-in animation has progressed
         if n_words > 0:
             words   = chunk["words"]
             lengths = [max(1, len(w)) for w in words]
             total   = sum(lengths)
             target  = progress * total
-            cumul   = 0
+            cumul_before = 0
             active_w = n_words - 1
             for i, ln in enumerate(lengths):
-                cumul += ln
-                if cumul >= target:
+                if cumul_before + ln >= target:
                     active_w = i
                     break
+                cumul_before += ln
+
+            word_frac_dur = lengths[active_w] / total
+            word_dur_sec  = word_frac_dur * dur
+            into_word     = max(0.0, (target - cumul_before) / max(lengths[active_w], 1)) * word_dur_sec
+            pop_dur       = min(0.16, max(word_dur_sec * 0.6, 0.04))
+            pop_progress  = max(0.0, min(1.0, into_word / pop_dur))
         else:
             active_w = -1
 
-        # Show only the sentence for the current chunk (not cumulative)
-        # Use full lines — all words shown, active word highlighted
-        lines = chunk["lines"]
+        # Reveal only words spoken so far (progressive word-by-word reveal)
+        visible_n = max(active_w + 1, 0)
+        lines = chunk["wrap_cache"].get(visible_n, chunk["wrap_cache"][chunk["n_words"]])
 
         # Render frame
         img = _render_sentence_frame(
             chunk["bg"], lines, font, active_w,
             text_color, chunk["accent"], stroke_col, stroke_w,
-            center_y, fade_alpha=alpha,
+            center_y, fade_alpha=alpha, pop_progress=pop_progress,
         )
 
         # Channel badge
@@ -488,7 +529,7 @@ def compile_story_video(
         codec=cfg.VIDEO_CODEC,
         bitrate=cfg.VIDEO_BITRATE,
         audio=False,
-        logger=None,
+        logger="bar",
     )
     video_clip.close()
     log.info("Subtitle render done → %s", tmp_nowave)
@@ -516,18 +557,58 @@ def compile_story_video(
         log.warning("Waveform overlay failed, using plain video: %s", r.stderr[-300:])
         tmp_waved = tmp_nowave
 
-    # ── Step C: mux audio ────────────────────────────────────────────────────
-    mux_cmd = [
-        "ffmpeg", "-y",
-        "-i", tmp_waved,
-        "-i", audio_path,
-        "-c:v", "copy",
-        "-c:a", cfg.AUDIO_CODEC,
-        "-b:a", cfg.AUDIO_BITRATE,
-        "-shortest",
-        output_path,
-    ]
-    subprocess.run(mux_cmd, check=True, capture_output=True)
+    # ── Step C: mux audio (optionally mixed with ducked background music) ────
+    bg_music = getattr(cfg, "STORY_BG_MUSIC", None)
+    music_vol_db = float(getattr(cfg, "STORY_BG_MUSIC_VOLUME_DB", -22))
+    duck_enabled = bool(getattr(cfg, "STORY_BG_MUSIC_DUCK", True))
+
+    if bg_music and os.path.exists(bg_music):
+        log.info("Mixing background music (%s) under narration …", bg_music)
+        if duck_enabled:
+            # Sidechain-compress the music against the narration so it
+            # automatically ducks under speech and comes back up in gaps.
+            audio_filter = (
+                f"[2:a]volume={music_vol_db}dB,aloop=loop=-1:size=2e9,atrim=0:{total_dur}[music];"
+                f"[1:a]asplit=2[narr1][narr2];"
+                f"[music][narr1]sidechaincompress=threshold=0.05:ratio=8:attack=5:release=300[ducked];"
+                f"[narr2][ducked]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+            )
+        else:
+            audio_filter = (
+                f"[2:a]volume={music_vol_db}dB,aloop=loop=-1:size=2e9,atrim=0:{total_dur}[music];"
+                f"[1:a][music]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+            )
+        mux_cmd = [
+            "ffmpeg", "-y",
+            "-i", tmp_waved,
+            "-i", audio_path,
+            "-i", bg_music,
+            "-filter_complex", audio_filter,
+            "-map", "0:v", "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", cfg.AUDIO_CODEC,
+            "-b:a", cfg.AUDIO_BITRATE,
+            "-shortest",
+            output_path,
+        ]
+        r = subprocess.run(mux_cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            log.warning("Background music mix failed, falling back to narration-only audio: %s",
+                        r.stderr[-400:])
+            bg_music = None  # fall through to plain mux below
+
+    if not bg_music or not os.path.exists(bg_music or ""):
+        mux_cmd = [
+            "ffmpeg", "-y",
+            "-i", tmp_waved,
+            "-i", audio_path,
+            "-c:v", "copy",
+            "-c:a", cfg.AUDIO_CODEC,
+            "-b:a", cfg.AUDIO_BITRATE,
+            "-shortest",
+            output_path,
+        ]
+        subprocess.run(mux_cmd, check=True, capture_output=True)
 
     # Cleanup
     for tmp in [tmp_nowave, tmp_waved]:

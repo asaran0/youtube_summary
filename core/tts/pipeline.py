@@ -101,8 +101,24 @@ def _build_audio_and_timeline(
              "phrases": [{"text": str, "start": float, "end": float}, ...]}
     """
     sample_rate = per_segment_audio[0]["sample_rate"] if per_segment_audio else 44100
-    pause = cfg.TTS_PAUSE_BETWEEN_SEGMENTS
+    base_pause = cfg.TTS_PAUSE_BETWEEN_SEGMENTS
     answer_pause_extra = getattr(cfg, "TTS_ANSWER_PAUSE_EXTRA", 0.0)
+    vary_pause = getattr(cfg, "TTS_PAUSE_VARY_BY_PUNCTUATION", False)
+
+    def pause_for(text: str) -> float:
+        """Shorter pause after a plain full stop, longer for suspense (...) or
+        a question — makes back-to-back narration feel less mechanically even.
+        Off by default (vary_pause=False) so existing modes are unaffected."""
+        if not vary_pause:
+            return base_pause
+        t = (text or "").rstrip().rstrip("\"'\u201d\u2019)")
+        if t.endswith("..."):
+            return base_pause * 1.3
+        if t.endswith("?"):
+            return base_pause * 1.15
+        if t.endswith("!"):
+            return base_pause * 1.1
+        return base_pause * 0.7  # plain '।' / '.' — keep the story moving
 
     audio_parts: list[np.ndarray] = []
     current = 0.0
@@ -118,6 +134,7 @@ def _build_audio_and_timeline(
         if chunk.get("is_silent"):
             dur = max(chunk.get("silent_duration", 1.0), 0.1)
             display = chunk.get("display_text", chunk.get("text", ""))
+            pause = pause_for(display)
 
             chunk["source_new_start"] = chunk.get("new_start", chunk.get("start", 0.0))
             chunk["new_start"] = current
@@ -182,6 +199,7 @@ def _build_audio_and_timeline(
         ]
 
         current = chunk["new_end"]
+        pause = pause_for(chunk.get("text", ""))
         add_silence(pause)
         current += pause
 
