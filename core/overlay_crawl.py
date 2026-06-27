@@ -477,8 +477,8 @@ def render_empty_space_overlay(
     t: float,
     total_dur: float,
     font: ImageFont.FreeTypeFont,
-    text_start: str  = "Try to answer in comments",
-    text_end: str    = "Comment your doubts.",
+    text_start: str  = "Try to Answer",
+    text_end: str    = "In the Comments!",
     fade_in_at: float  = 10.0,   # seconds before end to start fading IN the overlay
     fade_out_at: float =  3.0,   # seconds before end to start fading OUT
     bg_color: Color    = (0, 0, 0),
@@ -688,19 +688,27 @@ def make_toast_crawls(
         q_start   = entry["v_start"]
         a_start   = entry["a_start"]
         q_dur     = max(a_start - q_start, 0.1)
-        # Hold time: toast duration but leave 0.6s for slide-out before answer
-        hold_time = min(duration, q_dur - 0.6)
-        if hold_time <= 0.3:
+
+        # Toast appears AFTER the question is spoken — in the tail of the
+        # question phase, not at the very start.
+        # We start it when ~80% of question phase has elapsed (question nearly done),
+        # leaving 0.55s for slide-in and `duration` seconds of hold before answer.
+        slide_dur    = 0.55
+        toast_start  = max(q_start + q_dur * 0.80,          # after 80% of question spoken
+                           a_start - duration - slide_dur)   # or `duration` secs before answer
+        toast_start  = max(q_start + 0.3, toast_start)       # never before question starts
+        toast_end    = a_start - 0.1                         # always gone before answer
+        hold_time    = toast_end - toast_start - slide_dur
+        if hold_time <= 0.2:
             continue   # question phase too short — skip toast
-        end_time  = q_start + hold_time + 0.55   # 0.55s slide-in + hold
 
         specs.append(CrawlSpec(
             text         = main_text,
             sub_text     = sub_text,
             icon_left    = ">>",
             icon_right   = "",
-            start_time   = q_start,
-            end_time     = min(end_time, a_start - 0.1),
+            start_time   = toast_start,
+            end_time     = toast_end,
             font         = font,
             y_frac       = y_frac,
             style        = style,

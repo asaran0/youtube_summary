@@ -1,101 +1,299 @@
-Q: What is Artificial Intelligence (AI)?
+Q1: What is Artificial Intelligence (AI)?
 A: Artificial Intelligence (AI) is the branch of computer science that enables machines to perform tasks that normally require human intelligence, such as learning, reasoning, problem-solving, and decision-making.
 
-Q: Who is known as the Father of Artificial Intelligence?
+Q2: Who is known as the Father of Artificial Intelligence?
 A: John McCarthy is known as the Father of Artificial Intelligence. He coined the term "Artificial Intelligence" in 1956.
 
-Q: What is the main goal of AI?
+Q3: What is the main goal of AI?
 A: The main goal of AI is to develop intelligent systems that can learn, reason, solve problems, and make decisions like humans.
 
-Q: What are the different types of Artificial Intelligence?
+Q4: What are the different types of Artificial Intelligence?
 A: The main types of AI are Reactive Machines, Limited Memory AI, Theory of Mind AI, and Self-Aware AI.
 
-Q: What is Reactive Machine AI?
+Q5: What is Reactive Machine AI?
 A: Reactive Machine AI is the simplest type of AI that reacts only to current inputs and does not store past experiences or learn from them.
 
-Q: What is Limited Memory AI?
+Q6: What is Limited Memory AI?
 A: Limited Memory AI can use past data and experiences to make better decisions. Most modern AI applications, such as self-driving cars, use this type of AI.
 
-Q: What is Theory of Mind AI?
+Q7: What is Theory of Mind AI?
 A: Theory of Mind AI is a future AI concept where machines can understand human emotions, beliefs, and intentions.
 
-Q: What is Self-Aware AI?
+Q8: What is Self-Aware AI?
 A: Self-Aware AI is a hypothetical AI that possesses consciousness and self-awareness. It does not currently exist.
 
-Q: What is Machine Learning?
+Q9: What is Machine Learning?
 A: Machine Learning (ML) is a subset of AI that enables computers to learn from data without being explicitly programmed.
 
-Q: What is Deep Learning?
+Q10: What is Deep Learning?
 A: Deep Learning is a subset of Machine Learning that uses artificial neural networks with multiple layers to learn complex patterns from data.
 
-Q: What is Data Science?
+Q11: What is Data Science?
 A: Data Science is the field of collecting, processing, analyzing, and interpreting data to extract useful insights and support decision-making.
 
-Q: What is an AI model?
+Q12: What is an AI model?
 A: An AI model is a trained program that learns patterns from data and makes predictions or decisions based on new inputs.
 
-Q: What is training data?
+Q13: What is training data?
 A: Training data is the dataset used to teach an AI or Machine Learning model how to recognize patterns and make predictions.
 
-Q: What is testing data?
+Q14: What is testing data?
 A: Testing data is a separate dataset used to evaluate the performance and accuracy of a trained AI model.
 
-Q: What is a dataset?
+Q15: What is a dataset?
 A: A dataset is a collection of related data used for training, validating, or testing AI and Machine Learning models.
 
-Q: What is supervised learning?
+Q16: What is supervised learning?
 A: Supervised learning is a Machine Learning technique where the model is trained using labeled data containing both inputs and correct outputs.
 
-Q: What is unsupervised learning?
+Q17: What is unsupervised learning?
 A: Unsupervised learning is a Machine Learning technique where the model learns patterns from unlabeled data without predefined outputs.
 
-Q: What is reinforcement learning?
+Q18: What is reinforcement learning?
 A: Reinforcement learning is a Machine Learning technique in which an agent learns by interacting with an environment and receiving rewards or penalties.
 
-Q: What is classification in Machine Learning?
+Q19: What is classification in Machine Learning?
 A: Classification is a supervised learning task where the model predicts predefined categories or classes, such as spam or not spam.
 
-Q: What is regression in Machine Learning?
+Q20: What is regression in Machine Learning?
 A: Regression is a supervised learning task used to predict continuous numerical values, such as house prices or temperatures.
 
-Q: What is clustering?
+Q21: What is clustering?
 A: Clustering is an unsupervised learning technique that groups similar data points into clusters based on their characteristics.
 
-Q: What is a feature in Machine Learning?
+Q22: What is a feature in Machine Learning?
 A: A feature is an individual measurable property or characteristic of the data used as input for a Machine Learning model.
 
-Q: What is feature engineering?
+Q23: What is feature engineering?
 A: Feature engineering is the process of selecting, modifying, or creating features to improve the performance of a Machine Learning model.
 
-Q: What is a label in Machine Learning?
+Q24: What is a label in Machine Learning?
 A: A label is the correct output or target value associated with each training example in supervised learning.
 
-Q: What is an algorithm in Artificial Intelligence?
+Q25: What is an algorithm in Artificial Intelligence?
 A: An algorithm is a step-by-step procedure or set of rules that an AI system follows to solve a problem, learn from data, or make predictions.
 ```text
-Q: What is overfitting in Machine Learning?
+Q26: What is overfitting in Machine Learning?
 A: Overfitting occurs when a model learns the training data too well, including noise and outliers, resulting in poor performance on new data.
 
-Q: What is underfitting in Machine Learning?
+Q27: What is underfitting in Machine Learning?
 A: Underfitting occurs when a model is too simple to capture patterns in the data, leading to poor performance on both training and testing data.
 
-Q: What is bias in Machine Learning?
+Q28: What is bias in Machine Learning?
 A: Bias is the error caused by overly simple assumptions in a model, which can lead to underfitting.
 
-Q: What is variance in Machine Learning?
+Q29: What is variance in Machine Learning?
 A: Variance is the error caused by a model being too sensitive to small changes in the training data, which can lead to overfitting.
 
-Q: What is the bias-variance tradeoff?
+Q30: What is the bias-variance tradeoff?
 A: The bias-variance tradeoff is the balance between creating a model that is neither too simple (high bias) nor too complex (high variance).
 
-Q: What is a neural network?
+Q31: What is a neural network?
 A: A neural network is a computing model inspired by the human brain. It consists of interconnected nodes (neurons) that process information and learn patterns from data.
 
-Q: What is a neuron in an artificial neural network?
+Q32: What is a neuron in an artificial neural network?
 A: A neuron is the basic processing unit of a neural network. It receives inputs, performs calculations, and produces an output.
 
-Q: What is an input layer in a neural network?
+Q33: What is an input layer in a neural network?
 A: The input layer is the first layer of a neural network that receives input data for processing.
 
-Q: What is a hidden layer?
+Q34: What is a hidden layer?
 A: A hidden layer is a layer between the input and output layers where computations and feature extraction take place.
+
+Q35: What is an output layer?
+A: The output layer is the final layer of a neural network that produces the prediction or result.
+
+Q36: What is an epoch in Machine Learning?
+A: An epoch is one complete pass of the entire training dataset through a Machine Learning model during training.
+
+Q37: What is batch size?
+A: Batch size is the number of training samples processed by a model before updating its parameters.
+
+Q38: What is a loss function?
+A: A loss function measures the difference between the predicted output and the actual output. The goal of training is to minimize the loss.
+
+Q39: What is an activation function?
+A: An activation function determines whether a neuron should be activated. Common activation functions include ReLU, Sigmoid, and Tanh.
+
+Q40: What is gradient descent?
+A: Gradient descent is an optimization algorithm used to minimize the loss function by updating model parameters.
+
+Q41: What is a hyperparameter?
+A: A hyperparameter is a configuration value set before training, such as learning rate, batch size, or the number of epochs.
+
+Q42: What is model training?
+A: Model training is the process of teaching an AI model using training data so it can learn patterns and make predictions.
+
+Q43: What is model evaluation?
+A: Model evaluation is the process of measuring how well a trained model performs on unseen data using evaluation metrics.
+
+Q44: What is accuracy in Machine Learning?
+A: Accuracy is the percentage of correct predictions made by a model out of the total number of predictions.
+
+Q45: What is precision?
+A: Precision measures the proportion of correctly predicted positive instances out of all predicted positive instances.
+
+Q46: What is recall?
+A: Recall measures the proportion of correctly predicted positive instances out of all actual positive instances.
+
+Q47: What is the F1-score?
+A: The F1-score is the harmonic mean of precision and recall. It provides a balanced measure of a model's performance.
+
+Q48: What is Natural Language Processing (NLP)?
+A: Natural Language Processing (NLP) is a branch of AI that enables computers to understand, interpret, and generate human language.
+
+Q49: What is Computer Vision?
+A: Computer Vision is a branch of AI that enables computers to interpret, analyze, and understand images and videos.
+
+Q50: What is image recognition?
+A: Image recognition is a Computer Vision task in which an AI system identifies and classifies objects, people, or scenes in images.
+```text
+Q51: What is object detection?
+A: Object detection is a Computer Vision technique that identifies and locates objects within an image or video by drawing bounding boxes around them.
+
+Q52: What is image classification?
+A: Image classification is the process of assigning a label or category to an image based on its content.
+
+Q53: What is speech recognition?
+A: Speech recognition is an AI technology that converts spoken language into text or commands.
+
+Q54: What is Generative AI?
+A: Generative AI is a type of AI that creates new content such as text, images, audio, videos, or code based on patterns learned from existing data.
+
+Q55: What is a Large Language Model (LLM)?
+A: A Large Language Model (LLM) is an AI model trained on massive amounts of text data to understand and generate human-like language.
+
+Q56: What is ChatGPT?
+A: ChatGPT is an AI chatbot developed by OpenAI that uses a Large Language Model to answer questions, generate text, write code, and assist with various tasks.
+
+Q57: What is prompt engineering?
+A: Prompt engineering is the practice of writing clear and effective prompts to obtain accurate and useful responses from AI models.
+
+Q58: What is an AI chatbot?
+A: An AI chatbot is a software application that uses Artificial Intelligence to understand user queries and provide automated responses.
+
+Q59: What is data preprocessing?
+A: Data preprocessing is the process of cleaning, transforming, and organizing raw data before using it to train an AI model.
+
+Q60: What is data cleaning?
+A: Data cleaning is the process of removing incorrect, duplicate, or missing data to improve data quality.
+
+Q61: What is missing data?
+A: Missing data refers to incomplete information in a dataset where one or more values are absent.
+
+Q62: What is normalization?
+A: Normalization is the process of scaling numerical data to a common range, usually between 0 and 1, to improve model performance.
+
+Q63: What is standardization?
+A: Standardization transforms data so that it has a mean of 0 and a standard deviation of 1, making features comparable.
+
+Q64: What is model deployment?
+A: Model deployment is the process of making a trained AI model available for real-world use in applications or services.
+
+Q65: What is inference in AI?
+A: Inference is the process of using a trained AI model to make predictions on new, unseen data.
+
+Q66: What is transfer learning?
+A: Transfer learning is a technique where a pre-trained model is reused and fine-tuned for a different but related task.
+
+Q67: What is OpenAI?
+A: OpenAI is an AI research and technology company that develops advanced AI models such as ChatGPT and GPT.
+
+Q68: What is TensorFlow?
+A: TensorFlow is an open-source Machine Learning framework developed by Google for building and training AI models.
+
+Q69: What is PyTorch?
+A: PyTorch is an open-source Deep Learning framework developed by Meta that is widely used for AI research and development.
+
+Q70: What is Scikit-learn?
+A: Scikit-learn is a Python library that provides tools for Machine Learning, including classification, regression, clustering, and model evaluation.
+
+Q71: What is AI ethics?
+A: AI ethics is the study of designing and using AI responsibly by ensuring fairness, transparency, privacy, and accountability.
+
+Q72: What is bias in AI?
+A: AI bias occurs when an AI system produces unfair or inaccurate results due to biased training data or algorithms.
+
+Q73: What is explainable AI (XAI)?
+A: Explainable AI (XAI) refers to AI systems whose decisions can be understood and explained by humans.
+
+Q74: What are real-world applications of AI?
+A: AI is used in healthcare, finance, education, transportation, e-commerce, cybersecurity, manufacturing, customer service, and entertainment.
+
+Q75: Why is Artificial Intelligence important?
+A: Artificial Intelligence improves efficiency, automates repetitive tasks, supports better decision-making, enhances customer experiences, and enables innovative solutions across many industries.
+
+Q76: What is the future of Artificial Intelligence?
+A: The future of AI includes advancements in healthcare, robotics, autonomous vehicles, education, cybersecurity, and intelligent automation, making AI an essential part of everyday life.
+
+Q77: Can AI replace humans completely?
+A: No. AI can automate repetitive and data-driven tasks, but it cannot fully replace human creativity, emotions, ethics, and critical thinking.
+
+Q78: What are the advantages of Artificial Intelligence?
+A: AI offers faster decision-making, automation, improved accuracy, 24/7 availability, reduced human error, and increased productivity.
+
+Q79: What are the disadvantages of Artificial Intelligence?
+A: AI may lead to job displacement, high development costs, privacy concerns, bias in decision-making, and dependence on technology.
+
+Q80: What is responsible AI?
+A: Responsible AI refers to developing and using AI systems in a fair, transparent, secure, ethical, and accountable manner.
+
+Q81: What is AI automation?
+A: AI automation combines Artificial Intelligence with automation technologies to perform tasks with minimal human intervention.
+
+Q82: What is robotics in AI?
+A: Robotics in AI involves designing intelligent robots that can perceive their environment, make decisions, and perform physical tasks.
+
+Q83: What is an expert system?
+A: An expert system is an AI application that uses a knowledge base and inference rules to solve problems similar to a human expert.
+
+Q84: What is a knowledge base in AI?
+A: A knowledge base is a collection of facts, rules, and information used by an AI system to make decisions and solve problems.
+
+Q85: What is an inference engine?
+A: An inference engine is the component of an expert system that applies logical rules to the knowledge base to reach conclusions.
+
+Q86: What is fuzzy logic?
+A: Fuzzy logic is an AI technique that allows reasoning with uncertain or approximate information instead of only true or false values.
+
+Q87: What is computer perception?
+A: Computer perception enables AI systems to understand information from images, videos, audio, and sensors, similar to human senses.
+
+Q88: What is autonomous AI?
+A: Autonomous AI refers to AI systems that can perform tasks and make decisions independently with minimal human intervention.
+
+Q89: What is edge AI?
+A: Edge AI is the deployment of AI models on local devices such as smartphones, cameras, and IoT devices instead of relying on cloud servers.
+
+Q90: What is cloud AI?
+A: Cloud AI refers to AI services and models hosted on cloud platforms that provide scalable computing power and storage.
+
+Q91: What is an AI agent?
+A: An AI agent is a software system that observes its environment, makes decisions, and performs actions to achieve specific goals.
+
+Q92: What is a smart assistant?
+A: A smart assistant is an AI-powered application that performs tasks and answers user queries using voice or text, such as Siri, Alexa, or Google Assistant.
+
+Q93: What is recommendation system in AI?
+A: A recommendation system suggests products, movies, music, or other content based on user preferences and behavior.
+
+Q94: What skills are required to learn Artificial Intelligence?
+A: Important skills include Python programming, mathematics, statistics, Machine Learning, Deep Learning, data analysis, and problem-solving.
+
+Q95: Which programming language is most commonly used for AI?
+A: Python is the most widely used programming language for AI because of its simplicity and extensive AI libraries such as TensorFlow, PyTorch, and Scikit-learn.
+
+Q96: What are some popular AI libraries in Python?
+A: Popular AI libraries include NumPy, Pandas, Scikit-learn, TensorFlow, PyTorch, Keras, OpenCV, and NLTK.
+
+Q97: What is the difference between AI, Machine Learning, and Deep Learning?
+A: AI is the broad field of creating intelligent systems. Machine Learning is a subset of AI that enables systems to learn from data. Deep Learning is a subset of Machine Learning that uses neural networks with multiple layers.
+
+Q98: How do you start learning Artificial Intelligence?
+A: Start by learning Python, mathematics, statistics, Machine Learning fundamentals, Deep Learning, and working on real-world AI projects.
+
+Q99: What are common AI interview questions for freshers?
+A: Freshers are commonly asked about AI basics, Machine Learning types, supervised vs. unsupervised learning, neural networks, NLP, Computer Vision, overfitting, AI ethics, and real-world AI applications.
+
+Q100: Why should you learn Artificial Intelligence?
+A: Learning AI opens career opportunities in data science, machine learning, robotics, healthcare, finance, cybersecurity, and many other industries. AI is one of the fastest-growing and most in-demand technologies worldwide.

@@ -39,6 +39,23 @@ OUTPUT_FPS = 30
 # "macos" configurable installed system voices, zero setup.
 TTS_BACKEND = "kokoro"
 
+# ── Kokoro TTS settings for story mode ───────────────────────────────────────
+# Slower speed makes narration feel more emotional and human.
+# 0.82 = ~18% slower than natural — warm storytelling pace.
+KOKORO_SPEED = 0.82
+
+# Best voices per language for emotional narration:
+#   en: af_heart  — warm, emotive female voice
+#   hi: hf_alpha  — clear Hindi female narration
+KOKORO_VOICES = {
+    "en":  "af_heart",
+    "hi":  "hf_alpha",
+    "hig": "hf_alpha",
+}
+
+# Sentence fade-in/out duration in seconds
+STORY_SENTENCE_FADE = 0.22
+
 XTTS_VOICE_SAMPLE = "assets/clean_voice_story.wav"
 
 MACOS_TTS_VOICE = "Lekha"

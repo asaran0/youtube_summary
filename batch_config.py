@@ -29,7 +29,7 @@ BATCH_TITLE = "Artificial Intelligence Basic interview QA"
 
 # Where finished videos and metadata are written.
 # Overrides qa_mode/config.py OUTPUT_DIR for this batch run.
-OUTPUT_DIR = "output/qa/java"
+OUTPUT_DIR = "output/qa/ai"
 
 # ── Optional overrides (set to None to use qa_mode/config.py defaults) ───────
 

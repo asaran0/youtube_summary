@@ -12,7 +12,7 @@ LANGUAGE = "en"
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
 # ─────────────────────────────────────────────────────────────
-OUTPUT_MODE = "reel"
+OUTPUT_MODE = "full"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -24,6 +24,14 @@ OUTPUT_FPS     = 30
 #  NARRATION / TTS
 # ─────────────────────────────────────────────────────────────
 TTS_BACKEND = "kokoro"
+
+# ── Kokoro TTS settings ───────────────────────────────────────────────────────
+KOKORO_SPEED = 0.92   # slightly slower than natural — clearer for Q&A
+KOKORO_VOICES = {
+    "en":  "af_heart",
+    "hi":  "hf_alpha",
+    "hig": "hf_alpha",
+}
 
 XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
 
