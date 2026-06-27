@@ -693,14 +693,20 @@ def make_toast_crawls(
         # question phase, not at the very start.
         # We start it when ~80% of question phase has elapsed (question nearly done),
         # leaving 0.55s for slide-in and `duration` seconds of hold before answer.
-        slide_dur    = 0.55
-        toast_start  = max(q_start + q_dur * 0.80,          # after 80% of question spoken
-                           a_start - duration - slide_dur)   # or `duration` secs before answer
-        toast_start  = max(q_start + 0.3, toast_start)       # never before question starts
-        toast_end    = a_start - 0.1                         # always gone before answer
-        hold_time    = toast_end - toast_start - slide_dur
-        if hold_time <= 0.2:
-            continue   # question phase too short — skip toast
+        slide_dur   = 0.55
+        toast_end   = a_start - 0.1          # always gone before answer starts
+
+        # How much time is available for the toast?
+        # Use at most `duration` but shrink gracefully if question phase is short.
+        available   = toast_end - (q_start + q_dur * 0.75) - slide_dur
+        actual_dur  = max(0.8, min(duration, available))   # min 0.8s, max `duration`
+
+        toast_start = toast_end - actual_dur - slide_dur
+        toast_start = max(q_start + 0.2, toast_start)      # never before question starts
+
+        hold_time   = toast_end - toast_start - slide_dur
+        if hold_time <= 0.15 or toast_start >= toast_end:
+            continue   # genuinely no room — skip
 
         specs.append(CrawlSpec(
             text         = main_text,

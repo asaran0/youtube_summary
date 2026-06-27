@@ -44,13 +44,16 @@ TTS_BACKEND = "kokoro"
 # 0.82 = ~18% slower than natural — warm storytelling pace.
 KOKORO_SPEED = 0.82
 
-# Best voices per language for emotional narration:
-#   en: af_heart  — warm, emotive female voice
-#   hi: hf_alpha  — clear Hindi female narration
+# Voice selection — change to switch gender or style.
+# English male options : am_adam (deep) | am_michael (warm) | am_onyx (rich)
+# English female opts  : af_heart (emotive★) | af_bella | af_nicole
+# British male         : bm_george | bm_lewis
+# Hindi male           : hm_omega★ | hm_psi
+# Hindi female         : hf_alpha★ | hf_beta
 KOKORO_VOICES = {
-    "en":  "af_heart",
-    "hi":  "hf_alpha",
-    "hig": "hf_alpha",
+    "en":  "am_adam",    # ← deep male English narrator (change to "af_heart" for female)
+    "hi":  "hm_omega",   # ← Hindi male narrator       (change to "hf_alpha" for female)
+    "hig": "hm_omega",
 }
 
 # Sentence fade-in/out duration in seconds

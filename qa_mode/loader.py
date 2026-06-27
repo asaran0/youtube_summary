@@ -113,16 +113,19 @@ def load_qa_file(path: str, cfg) -> list[dict]:
         question = " ".join(question.split())
         answer_raw = " ".join(answer.split())
 
-        # ── Question ─────────────────────────────────────────────────────
-        if cfg.QA_SHOW_QUESTION_LABEL:
-            display_question = cfg.QA_QUESTION_LABEL_TEMPLATE.format(n=q_num) + question
-        else:
-            display_question = question
-
+        # Resolve the question number FIRST — use the explicit number from
+        # Q97:, Q98:, Q99: etc. (series number), fall back to loop index
+        # only for plain Q: format with no number.
         if num:
-            ques_no = num
+            ques_no = int(num)
         else:
             ques_no = q_num
+
+        # ── Question ─────────────────────────────────────────────────────
+        if cfg.QA_SHOW_QUESTION_LABEL:
+            display_question = cfg.QA_QUESTION_LABEL_TEMPLATE.format(n=ques_no) + question
+        else:
+            display_question = question
         # Question: spoken text = display text (questions rarely have parens)
         segments.append({
             "id": seg_id,
@@ -133,6 +136,7 @@ def load_qa_file(path: str, cfg) -> list[dict]:
             "avg_logprob": -0.1,
             "no_speech_prob": 0.01,
             "style": "question",
+            "q_num": ques_no,
         })
         seg_id += 1
 

@@ -24,17 +24,45 @@ log = get_logger("tts.kokoro")
 
 # Kokoro's own language codes (not the same as our cfg.LANGUAGE values).
 _LANG_CODE_MAP = {
-    "en": "a",   # American English
-    "hi": "h",   # Hindi
-    "hig": "h",  # Hinglish -> closest is the Hindi voice set
+    "en":  "a",   # American English
+    "hi":  "h",   # Hindi
+    "hig": "h",   # Hinglish -> closest is the Hindi voice set
 }
 
-# A reasonable default voice per language; override via cfg.KOKORO_VOICES.
+# Default voices — override via cfg.KOKORO_VOICES in your mode config.
+# ┌─────────────────────────────────────────────────────────────────────┐
+# │  AVAILABLE VOICES                                                   │
+# │                                                                     │
+# │  English (lang_code "a" — American):                                │
+# │    FEMALE: af_heart★ af_bella af_nicole af_aoede af_kore            │
+# │            af_sarah af_sky                                          │
+# │    MALE:   am_adam★  am_michael am_echo am_eric am_fenrir           │
+# │            am_liam   am_onyx    am_orion am_santa                   │
+# │                                                                     │
+# │  English (lang_code "b" — British):                                 │
+# │    FEMALE: bf_emma bf_isabella                                      │
+# │    MALE:   bm_george bm_lewis                                       │
+# │                                                                     │
+# │  Hindi (lang_code "h"):                                             │
+# │    FEMALE: hf_alpha★ hf_beta                                        │
+# │    MALE:   hm_omega★ hm_psi                                         │
+# │                                                                     │
+# │  ★ = recommended default for that language/gender                   │
+# └─────────────────────────────────────────────────────────────────────┘
 _DEFAULT_VOICES = {
-    "en": "af_heart",
-    "hi": "hf_alpha",
-    "hig": "hf_alpha",
+    "en":  "af_heart",   # warm female — change to "am_adam" for male
+    "hi":  "hf_alpha",   # clear Hindi female — change to "hm_omega" for male
+    "hig": "hf_alpha",   # same as Hindi
 }
+
+# Corresponding lang_codes for British English voices
+_BRITISH_VOICES = {"bf_emma", "bf_isabella", "bm_george", "bm_lewis"}
+
+def _resolve_lang_code(voice: str, lang: str) -> str:
+    """Pick the right Kokoro lang_code for a given voice name."""
+    if voice in _BRITISH_VOICES:
+        return "b"
+    return _LANG_CODE_MAP.get(lang, "a")
 
 
 class KokoroStrategy(TTSStrategy):
@@ -53,12 +81,14 @@ class KokoroStrategy(TTSStrategy):
     def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
         from kokoro import KPipeline
 
-        lang_code = getattr(cfg, "KOKORO_LANG_CODES", _LANG_CODE_MAP).get(cfg.LANGUAGE, "a")
-        voice = getattr(cfg, "KOKORO_VOICES", _DEFAULT_VOICES).get(cfg.LANGUAGE, "af_heart")
-        speed = getattr(cfg, "KOKORO_SPEED", 1.0)
+        voices    = getattr(cfg, "KOKORO_VOICES", _DEFAULT_VOICES)
+        voice     = voices.get(cfg.LANGUAGE, _DEFAULT_VOICES.get(cfg.LANGUAGE, "af_heart"))
+        lang_code = _resolve_lang_code(voice, cfg.LANGUAGE)
+        speed     = getattr(cfg, "KOKORO_SPEED", 1.0)
         sample_rate = 24000  # fixed by the Kokoro model
 
-        log.info("Loading Kokoro pipeline (lang_code=%s, voice=%s) …", lang_code, voice)
+        log.info("Loading Kokoro pipeline (lang_code=%s, voice=%s, speed=%.2f) …",
+                 lang_code, voice, speed)
         pipeline = KPipeline(lang_code=lang_code)
 
         results = []
