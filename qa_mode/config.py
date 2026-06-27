@@ -12,7 +12,7 @@ LANGUAGE = "en"
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
 # ─────────────────────────────────────────────────────────────
-OUTPUT_MODE = "full"
+OUTPUT_MODE = "reel"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -270,6 +270,9 @@ QA_SUBSCRIBE_ACCENT    = (245, 200, 66)
 QA_SUBSCRIBE_BG        = (15, 15, 30)
 
 # ── End-of-video empty-space smooth transition ───────────────────────────────
+# Text shown in the end-of-video overlay (emoji auto-converted to ASCII symbols)
+QA_TRANSITION_TEXT_START  = "Try to answer in the comments!"
+QA_TRANSITION_TEXT_END    = "Like & Share, if u found this helpful!"
 QA_TRANSITION_FADE_IN_AT  = 10.0   # seconds before end: overlay starts fading in
 QA_TRANSITION_FADE_OUT_AT =  3.0   # seconds before end: overlay starts fading out
 QA_TRANSITION_OPACITY     =  0.55  # peak opacity (0.0–1.0)

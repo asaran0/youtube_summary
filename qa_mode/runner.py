@@ -502,6 +502,10 @@ def _run_split_layout(selected, tts_audio_path, title, target_w, target_h, font_
         # Smooth empty-space overlay near end of video
         img = render_empty_space_overlay(
             img, t, safe_dur, font=_sub_font,
+            text_start  = getattr(cfg, "QA_TRANSITION_TEXT_START",
+                                  "Try to answer in the comments!"),
+            text_end    = getattr(cfg, "QA_TRANSITION_TEXT_END",
+                                  "Like, Share and Subscribe [i]"),
             fade_in_at  = float(getattr(cfg, "QA_TRANSITION_FADE_IN_AT",  10.0)),
             fade_out_at = float(getattr(cfg, "QA_TRANSITION_FADE_OUT_AT",  3.0)),
             accent_color= subscribe_accent,
