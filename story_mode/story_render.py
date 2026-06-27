@@ -54,14 +54,6 @@ _LATIN_CANDIDATES = [
 ]
 
 
-def _detect_script(text: str) -> str:
-    """Return 'hi' if text contains any Devanagari characters, else 'en'."""
-    for ch in text:
-        if "\u0900" <= ch <= "\u097F":
-            return "hi"
-    return "en"
-
-
 def _load_font(size: int, lang: str, hint: str = None) -> ImageFont.FreeTypeFont:
     candidates = []
     if hint and os.path.exists(hint):
@@ -198,45 +190,32 @@ def _waveform_loop_path(accent: tuple, video_w: int, video_h: int,
     strip_h    = bar_zone_h + 16
     strip_y0   = bar_zone_y - 8
 
-    try:
-        for fi in range(n_frames):
-            t     = fi / fps
-            frame = Image.new("RGB", (video_w, video_h), (0, 0, 0))
+    for fi in range(n_frames):
+        t     = fi / fps
+        frame = Image.new("RGB", (video_w, video_h), (0, 0, 0))
 
-            # Semi-transparent strip background
-            strip  = Image.new("RGBA", (video_w, strip_h), (0, 0, 0, bg_alpha))
-            region = frame.crop((0, strip_y0, video_w, strip_y0 + strip_h)).convert("RGBA")
-            frame.paste(Image.alpha_composite(region, strip).convert("RGB"), (0, strip_y0))
-            draw = ImageDraw.Draw(frame)
+        # Semi-transparent strip background
+        strip  = Image.new("RGBA", (video_w, strip_h), (0, 0, 0, bg_alpha))
+        region = frame.crop((0, strip_y0, video_w, strip_y0 + strip_h)).convert("RGBA")
+        frame.paste(Image.alpha_composite(region, strip).convert("RGB"), (0, strip_y0))
+        draw = ImageDraw.Draw(frame)
 
-            for i in range(n_bars):
-                amp = (0.45
-                       + 0.40 * math.sin(2 * math.pi * freqs[i] * t + phases[i])
-                       + 0.15 * math.sin(2 * math.pi * freqs[i] * 2.3 * t + phases[i] * 1.7))
-                amp    = max(0.05, min(1.0, amp))
-                bh_px  = max(4, int(amp * bar_zone_h))
-                x      = start_x + i * (bar_w + gap)
-                bright = 0.6 + 0.4 * amp
-                color  = tuple(min(255, int(c * bright)) for c in bar_color)
-                draw.rectangle([x, bar_zone_y + bar_zone_h - bh_px,
-                                x + bar_w - 1, bar_zone_y + bar_zone_h], fill=color)
+        for i in range(n_bars):
+            amp = (0.45
+                   + 0.40 * math.sin(2 * math.pi * freqs[i] * t + phases[i])
+                   + 0.15 * math.sin(2 * math.pi * freqs[i] * 2.3 * t + phases[i] * 1.7))
+            amp    = max(0.05, min(1.0, amp))
+            bh_px  = max(4, int(amp * bar_zone_h))
+            x      = start_x + i * (bar_w + gap)
+            bright = 0.6 + 0.4 * amp
+            color  = tuple(min(255, int(c * bright)) for c in bar_color)
+            draw.rectangle([x, bar_zone_y + bar_zone_h - bh_px,
+                            x + bar_w - 1, bar_zone_y + bar_zone_h], fill=color)
 
-            proc.stdin.write(frame.tobytes())
-    except (BrokenPipeError, OSError) as e:
-        proc.stdin.close()
-        proc.wait()
-        if os.path.exists(path):
-            os.remove(path)
-        raise RuntimeError(f"ffmpeg exited while writing waveform frames: {e}") from e
+        proc.stdin.write(frame.tobytes())
 
     proc.stdin.close()
     proc.wait()
-    if proc.returncode != 0 or not os.path.exists(path):
-        if os.path.exists(path):
-            os.remove(path)
-        raise RuntimeError(
-            f"ffmpeg failed to produce waveform loop (exit code {proc.returncode})."
-        )
     log.info("Waveform loop ready → %s", path)
     return path
 
@@ -252,8 +231,8 @@ def _get_badge_patch(text: str, font_path: str, cfg, accent: tuple,
         return _badge_cache[key]
 
     size    = getattr(cfg, "STORY_LOGO_FONT_SIZE", 30)
-    lang    = _detect_script(text)
-    font    = _load_font(size, lang, font_path if lang == "hi" else None)
+    lang    = getattr(cfg, "LANGUAGE", "hi")
+    font    = _load_font(size, lang, font_path)
     padding = 16
     margin  = 20
 
@@ -342,8 +321,13 @@ def _render_sentence_frame(
                 sc = stroke_color
 
             ww = _text_w(draw, word, font)
-            draw.text((x, y), word, font=font, fill=col,
-                       stroke_width=stroke_w, stroke_fill=sc)
+            # Stroke
+            for dx in range(-stroke_w, stroke_w + 1):
+                for dy in range(-stroke_w, stroke_w + 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    draw.text((x + dx, y + dy), word, font=font, fill=sc)
+            draw.text((x, y), word, font=font, fill=col)
             x += ww + _text_w(draw, " ", font)
             word_cursor += 1
         y += lh
@@ -403,6 +387,13 @@ def compile_story_video(
         lines   = _wrap(text, font, max_text_w, dummy_draw)
         words   = text.split()
 
+        # Pre-cache wrapped lines for every possible visible word count
+        # (avoids re-wrapping on every frame — huge speedup)
+        wrap_cache = {}
+        for n in range(1, len(words) + 1):
+            wrap_cache[n] = _wrap(" ".join(words[:n]), font, max_text_w, dummy_draw)
+        wrap_cache[0] = [""]
+
         chunks.append({
             "t_start":    t_start,
             "t_end":      t_end,
@@ -411,6 +402,7 @@ def compile_story_video(
             "words":      words,
             "n_words":    len(words),
             "accent":     palette[2],
+            "wrap_cache": wrap_cache,
         })
 
     if not chunks:
@@ -496,7 +488,7 @@ def compile_story_video(
         codec=cfg.VIDEO_CODEC,
         bitrate=cfg.VIDEO_BITRATE,
         audio=False,
-        logger="bar",
+        logger=None,
     )
     video_clip.close()
     log.info("Subtitle render done → %s", tmp_nowave)

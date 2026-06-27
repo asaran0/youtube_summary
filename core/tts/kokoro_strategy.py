@@ -78,45 +78,76 @@ class KokoroStrategy(TTSStrategy):
                 "macOS also needs espeak-ng:  brew install espeak-ng"
             )
 
-    def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
+    def synthesize_segments(self, texts: list[str], cfg,
+                            is_answer_flags: list[bool] | None = None) -> list[dict]:
         from kokoro import KPipeline
 
-        voices    = getattr(cfg, "KOKORO_VOICES", _DEFAULT_VOICES)
-        voice     = voices.get(cfg.LANGUAGE, _DEFAULT_VOICES.get(cfg.LANGUAGE, "af_heart"))
-        lang_code = _resolve_lang_code(voice, cfg.LANGUAGE)
-        speed     = getattr(cfg, "KOKORO_SPEED", 1.0)
-        sample_rate = 24000  # fixed by the Kokoro model
+        lang = cfg.LANGUAGE
+        sample_rate = 24000
 
-        log.info("Loading Kokoro pipeline (lang_code=%s, voice=%s, speed=%.2f) …",
-                 lang_code, voice, speed)
-        pipeline = KPipeline(lang_code=lang_code)
+        # ── Resolve voices and speeds ─────────────────────────────────────────
+        # Dual-voice: QA_QUESTION_VOICE / QA_ANSWER_VOICE override KOKORO_VOICES
+        q_voices = getattr(cfg, "QA_QUESTION_VOICE", None)
+        a_voices = getattr(cfg, "QA_ANSWER_VOICE",   None)
+        dual     = (q_voices is not None or a_voices is not None) and is_answer_flags is not None
 
+        default_voices = getattr(cfg, "KOKORO_VOICES", _DEFAULT_VOICES)
+        default_voice  = default_voices.get(lang, _DEFAULT_VOICES.get(lang, "af_heart"))
+        default_speed  = getattr(cfg, "KOKORO_SPEED", 1.0)
+
+        if dual:
+            q_voice = (q_voices or default_voices).get(lang, default_voice)
+            a_voice = (a_voices or default_voices).get(lang, default_voice)
+            q_speed = getattr(cfg, "QA_QUESTION_SPEED", default_speed)
+            a_speed = getattr(cfg, "QA_ANSWER_SPEED",   default_speed)
+            log.info("Dual-voice mode: Q=%s (%.2fx)  A=%s (%.2fx)",
+                     q_voice, q_speed, a_voice, a_speed)
+        else:
+            q_voice = a_voice = default_voice
+            q_speed = a_speed = default_speed
+            log.info("Single-voice mode: voice=%s speed=%.2f", default_voice, default_speed)
+
+        # ── Build per-lang-code pipelines (lazy, cached) ──────────────────────
+        pipelines: dict[str, object] = {}
+        def get_pipeline(voice: str) -> object:
+            lc = _resolve_lang_code(voice, lang)
+            if lc not in pipelines:
+                log.info("Loading Kokoro pipeline lang_code=%s …", lc)
+                pipelines[lc] = KPipeline(lang_code=lc)
+            return pipelines[lc]
+
+        # ── Synthesize each segment ────────────────────────────────────────────
+        flags   = is_answer_flags or [False] * len(texts)
         results = []
-        for i, text in enumerate(texts, 1):
-            log.info("  TTS %d/%d: %s …", i, len(texts), text[:50])
+
+        for i, (text, is_ans) in enumerate(zip(texts, flags), 1):
+            voice = a_voice if is_ans else q_voice
+            speed = a_speed if is_ans else q_speed
+            role  = "Answer" if is_ans else "Question"
+            log.info("  TTS %d/%d [%s | %s]: %s …", i, len(texts), role, voice, text[:50])
+
             cleaned = clean_text(text, cfg)
             if not cleaned:
                 results.append(_silent_segment(text, sample_rate))
                 continue
 
             try:
-                chunks = []
-                for _graphemes, _phonemes, audio in pipeline(cleaned, voice=voice, speed=speed):
-                    chunks.append(np.asarray(audio))
+                pipe   = get_pipeline(voice)
+                chunks = [np.asarray(audio)
+                          for _g, _p, audio in pipe(cleaned, voice=voice, speed=speed)]
 
                 if not chunks:
                     results.append(_silent_segment(text, sample_rate))
                     continue
 
                 waveform = np.concatenate(chunks)
-                samples = _float_to_int16(waveform)
-                dur = len(samples) / sample_rate
+                samples  = _float_to_int16(waveform)
+                dur      = len(samples) / sample_rate
                 results.append({
                     "samples": samples,
                     "sample_rate": sample_rate,
                     "phrases": [{"text": cleaned, "start": 0.0, "end": dur}],
                 })
-
             except Exception as e:
                 log.warning("Kokoro TTS failed for segment %d: %s", i, e)
                 results.append(_silent_segment(text, sample_rate))

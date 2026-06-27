@@ -1,3 +1,6 @@
 Q: What is the difference between JDK, JRE, and JVM?
 A: JVM (Java Virtual Machine) is the engine that drives the Java code by converting bytecode into machine language. JRE (Java Runtime Environment) is a software package that provides the JVM along with Java binaries and other libraries to run a Java application.
 JDK (Java Development Kit) is a full-featured software development kit that includes the JRE plus development tools like the compiler (javac) and debuggers needed to write and compile Java programs.
+Q44: Why is Java called a "Platform Independent" language?
+A: Java is platform-independent because the Java compiler does not convert source code directly into machine-specific code. Instead, it compiles the code into an intermediate format called 'bytecode' (.class file). This bytecode is non-executable on its own and requires a platform-specific JVM to interpret and run it. Since every operating system has its own JVM, the same bytecode can run seamlessly across Windows, Linux, and Mac.
+

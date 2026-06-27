@@ -33,6 +33,26 @@ KOKORO_VOICES = {
     "hig": "hf_alpha",
 }
 
+# ── Dual-voice TTS — separate voice for question vs answer ────────────────────
+# Requires TTS_BACKEND = "kokoro". Set to None to disable (uses KOKORO_VOICES).
+#
+# English male:   am_adam  am_michael  am_onyx  am_eric  am_fenrir  am_orion
+# English female: af_heart af_bella  af_nicole  af_sarah  af_sky
+# Hindi male:     hm_omega  hm_psi
+# Hindi female:   hf_alpha  hf_beta
+QA_QUESTION_VOICE = {
+    "en":  "am_adam",      # deep male — interviewer voice
+    "hi":  "hm_omega",
+    "hig": "hm_omega",
+}
+QA_ANSWER_VOICE = {
+    "en":  "af_heart",     # warm female — expert explaining
+    "hi":  "hf_alpha",
+    "hig": "hf_alpha",
+}
+QA_QUESTION_SPEED = 0.94   # speed for question narration
+QA_ANSWER_SPEED   = 0.90   # slightly slower for answers
+
 XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
 
 MACOS_TTS_VOICE = "Samantha"
