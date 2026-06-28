@@ -29,8 +29,7 @@ class TTSStrategy(ABC):
     name: str = "base"
 
     @abstractmethod
-    def synthesize_segments(self, texts: list[str], cfg,
-                            is_answer_flags: list[bool] | None = None) -> list[dict]:
+    def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
         """
         Generate speech for an ordered list of cleaned text segments.
         Does NOT write any file and does NOT insert pauses between
