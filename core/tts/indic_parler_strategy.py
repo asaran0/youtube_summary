@@ -48,7 +48,8 @@ class IndicParlerStrategy(TTSStrategy):
                 "  pip install soundfile"
             )
 
-    def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
+    def synthesize_segments(self, texts: list[str], cfg,
+                            is_answer_flags: list[bool] | None = None) -> list[dict]:
         import torch
         from parler_tts import ParlerTTSForConditionalGeneration
         from transformers import AutoTokenizer

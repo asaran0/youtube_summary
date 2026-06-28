@@ -50,7 +50,8 @@ class MacOSStrategy(TTSStrategy):
                 "This backend only works on macOS."
             )
 
-    def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
+    def synthesize_segments(self, texts: list[str], cfg,
+                            is_answer_flags: list[bool] | None = None) -> list[dict]:
         import numpy as np
 
         voice = cfg.MACOS_TTS_VOICE

@@ -192,7 +192,8 @@ class XTTSStrategy(TTSStrategy):
                 "Set cfg.XTTS_VOICE_SAMPLE to a 10-30s clean WAV."
             )
 
-    def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
+    def synthesize_segments(self, texts: list[str], cfg,
+                            is_answer_flags: list[bool] | None = None) -> list[dict]:
         import torch
 
         try:

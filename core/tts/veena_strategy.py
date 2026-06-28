@@ -67,7 +67,8 @@ class VeenaStrategy(TTSStrategy):
                 "This is expected/known on Apple Silicon, not a bug."
             )
 
-    def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
+    def synthesize_segments(self, texts: list[str], cfg,
+                            is_answer_flags: list[bool] | None = None) -> list[dict]:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from snac import SNAC

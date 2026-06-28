@@ -31,7 +31,8 @@ class MMSStrategy(TTSStrategy):
                 "Install with:  pip install transformers torch"
             )
 
-    def synthesize_segments(self, texts: list[str], cfg) -> list[dict]:
+    def synthesize_segments(self, texts: list[str], cfg,
+                            is_answer_flags: list[bool] | None = None) -> list[dict]:
         import torch
         from transformers import VitsModel, AutoTokenizer
 
