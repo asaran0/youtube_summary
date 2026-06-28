@@ -13,7 +13,7 @@ from utils import (
     get_logger, ensure_dirs, clean_temp, get_video_duration,
     find_hindi_font, human_duration,
 )
-from core.tts.pipeline import generate_tts_audio
+from story_mode.tts import generate_tts_audio
 from core.render import subtitles as subtitle_render
 from core.render import slideshow as slideshow_render
 from core.render import metadata as metadata_writer
@@ -32,8 +32,8 @@ def run(text_path: str, title: str = "summary", cfg=default_cfg, keep_temp: bool
 
     ensure_dirs(cfg.OUTPUT_DIR, cfg.TEMP_DIR, cfg.ASSETS_DIR)
 
-    from core.tts.factory import get_strategy
-    get_strategy(cfg.TTS_BACKEND).check_available(cfg)
+    from story_mode.tts import check_backend_available
+    check_backend_available(cfg)
 
     font_path = find_hindi_font(cfg)
 

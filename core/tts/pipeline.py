@@ -47,18 +47,15 @@ def generate_tts_audio(selected_chunks: list[dict], cfg) -> str:
     """
     ensure_dirs(cfg.TEMP_DIR)
 
-    # Silent chunks are never sent to the TTS strategy.
-    # We also pass chunk metadata (is_answer flag) so dual-voice backends
-    # can use a different voice for questions vs answers.
-    spoken_chunks = [
-        chunk for chunk in selected_chunks
+    # Only spoken, non-silent chunks go to TTS.
+    texts = [
+        chunk["text"].strip()
+        for chunk in selected_chunks
         if chunk.get("text", "").strip() and not chunk.get("is_silent")
     ]
-    texts    = [c["text"].strip() for c in spoken_chunks]
-    is_answer_flags = [bool(c.get("is_answer")) for c in spoken_chunks]
 
     cache_key = _tts_cache_key(texts, cfg)
-    output_path = os.path.join(cfg.TEMP_DIR, f"tts_audio_{cache_key}.wav")
+    output_path  = os.path.join(cfg.TEMP_DIR, f"tts_audio_{cache_key}.wav")
     timings_path = os.path.join(cfg.TEMP_DIR, f"tts_timings_{cache_key}.json")
 
     if os.path.exists(output_path) and os.path.exists(timings_path):
@@ -71,9 +68,7 @@ def generate_tts_audio(selected_chunks: list[dict], cfg) -> str:
 
     strategy = get_strategy(cfg.TTS_BACKEND)
     strategy.check_available(cfg)
-    per_segment_audio = strategy.synthesize_segments(
-        texts, cfg, is_answer_flags=is_answer_flags
-    )
+    per_segment_audio = strategy.synthesize_segments(texts, cfg)
 
     _build_audio_and_timeline(selected_chunks, per_segment_audio, output_path, cfg)
     _write_timings(selected_chunks, timings_path)
@@ -102,7 +97,6 @@ def _build_audio_and_timeline(
     """
     sample_rate = per_segment_audio[0]["sample_rate"] if per_segment_audio else 44100
     base_pause = cfg.TTS_PAUSE_BETWEEN_SEGMENTS
-    answer_pause_extra = getattr(cfg, "TTS_ANSWER_PAUSE_EXTRA", 0.0)
     vary_pause = getattr(cfg, "TTS_PAUSE_VARY_BY_PUNCTUATION", False)
 
     def pause_for(text: str) -> float:
@@ -160,9 +154,8 @@ def _build_audio_and_timeline(
         if not chunk.get("text", "").strip():
             continue
 
-        if chunk.get("is_answer") and answer_pause_extra > 0:
-            add_silence(answer_pause_extra)
-            current += answer_pause_extra
+        # Mode-specific pre-segment silence is handled by the mode's own
+        # TTS wrapper (qa_mode/tts.py), not here.
 
         segment = next(seg_iter, None)
         if segment is None:
@@ -229,11 +222,9 @@ def _build_audio_and_timeline(
 
 
 def _tts_cache_key(texts: list[str], cfg) -> str:
-    # Include dual-voice settings so switching voices invalidates the cache
-    q_voices = getattr(cfg, "QA_QUESTION_VOICE", {}) or {}
-    a_voices = getattr(cfg, "QA_ANSWER_VOICE",   {}) or {}
+    """Cache key based on text content + audio config. Mode-agnostic."""
     payload = "\n".join([
-        "tts-cache-v5",
+        "tts-cache-v6",
         cfg.TTS_BACKEND,
         cfg.LANGUAGE,
         getattr(cfg, "MACOS_TTS_VOICE", ""),
@@ -243,10 +234,7 @@ def _tts_cache_key(texts: list[str], cfg) -> str:
         str(cfg.AUDIO_POST_PROCESSING),
         cfg.AUDIO_FILTER,
         str(getattr(cfg, "KOKORO_SPEED", "")),
-        str(getattr(cfg, "QA_QUESTION_SPEED", "")),
-        str(getattr(cfg, "QA_ANSWER_SPEED", "")),
-        q_voices.get(cfg.LANGUAGE, ""),
-        a_voices.get(cfg.LANGUAGE, ""),
+        str(getattr(cfg, "KOKORO_VOICES", "")),
         "\n".join(texts),
     ])
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]

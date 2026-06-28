@@ -72,7 +72,7 @@ python main.py --mode story --file assets/sample_story.txt --title "नेपो
 # Q&A / interview-prep mode
 python main.py --mode qa --file assets/sample_interview_qa.txt --title "जावा इंटरव्यू"
 
-python main.py --mode qa --file assets/sample_interview_qa.txt --title "git"
+python -m  main.py --mode qa --file assets/sample_interview_qa.txt --title "जावा इंटरव्यू"
 
 # Override settings per-run without editing config files
 python main.py --mode story --file story.txt --output-mode reel --language hig
