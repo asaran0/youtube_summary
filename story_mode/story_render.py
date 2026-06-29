@@ -103,6 +103,50 @@ def _gradient_bg(w: int, h: int, top: tuple, bot: tuple) -> Image.Image:
     return Image.fromarray(arr)
 
 
+# ── Background image / video helpers ─────────────────────────────────────────
+
+def _prepare_image_bg(path: str, video_w: int, video_h: int,
+                       blur_radius: int = 18, dim: float = 0.45) -> Image.Image:
+    """
+    Load an image, resize+crop to fill the frame (cover mode), apply
+    Gaussian blur and dimming so subtitle text is always legible.
+
+    blur_radius : pixels of Gaussian blur  (0 = no blur)
+    dim         : multiply brightness by this (0.0 = black, 1.0 = original)
+    """
+    from PIL import ImageFilter
+    img = Image.open(path).convert("RGB")
+    # Cover: scale so the image fills the frame, crop centre
+    iw, ih = img.size
+    scale  = max(video_w / iw, video_h / ih)
+    nw, nh = int(iw * scale), int(ih * scale)
+    img    = img.resize((nw, nh), Image.LANCZOS)
+    left   = (nw - video_w) // 2
+    top    = (nh - video_h) // 2
+    img    = img.crop((left, top, left + video_w, top + video_h))
+    # Blur
+    if blur_radius > 0:
+        img = img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+    # Dim
+    if dim < 1.0:
+        arr = np.array(img, dtype=np.float32) * dim
+        img = Image.fromarray(arr.clip(0, 255).astype(np.uint8))
+    return img
+
+
+def _get_bg_video_duration(path: str) -> float:
+    """Return duration of a video file in seconds using ffprobe."""
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(r.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
 # ── Easing ────────────────────────────────────────────────────────────────────
 def _ease_out(p: float) -> float:
     return 1.0 - (1.0 - p) ** 2
@@ -400,6 +444,33 @@ def compile_story_video(
 
     font = _load_font(sub_size, lang, font_path)
 
+    # ── Detect background mode ───────────────────────────────────────────────
+    bg_mode      = getattr(cfg, "STORY_BG_MODE",   "gradient").lower()
+    bg_image_path = getattr(cfg, "STORY_BG_IMAGE",  "")
+    bg_video_path = getattr(cfg, "STORY_BG_VIDEO",  "")
+    bg_blur       = int(getattr(cfg,   "STORY_BG_BLUR",    18))
+    bg_dim        = float(getattr(cfg, "STORY_BG_DIM",     0.45))
+
+    # Validate and resolve bg_mode
+    if bg_mode == "image" and not (bg_image_path and os.path.exists(bg_image_path)):
+        log.warning("STORY_BG_MODE=image but STORY_BG_IMAGE not found (%s); "
+                    "falling back to gradient.", bg_image_path)
+        bg_mode = "gradient"
+    if bg_mode == "video" and not (bg_video_path and os.path.exists(bg_video_path)):
+        log.warning("STORY_BG_MODE=video but STORY_BG_VIDEO not found (%s); "
+                    "falling back to gradient.", bg_video_path)
+        bg_mode = "gradient"
+
+    log.info("Background mode: %s", bg_mode)
+
+    # Pre-load image background (shared across all chunks)
+    static_image_bg = None
+    if bg_mode == "image":
+        log.info("Loading background image: %s …", bg_image_path)
+        static_image_bg = _prepare_image_bg(
+            bg_image_path, video_width, video_height, bg_blur, bg_dim
+        )
+
     # ── Build chunk data ──────────────────────────────────────────────────────
     chunks = []
     dummy_draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
@@ -412,7 +483,14 @@ def compile_story_video(
             continue
 
         palette = PALETTES[idx % len(PALETTES)]
-        bg      = _gradient_bg(video_width, video_height, palette[0], palette[1])
+        # Background per chunk:
+        #   gradient → animated gradient (unique per sentence)
+        #   image    → shared static photo (blur+dim applied once)
+        #   video    → gradient used as PIL bg; video composited by ffmpeg later
+        if bg_mode == "image" and static_image_bg is not None:
+            bg = static_image_bg.copy()
+        else:
+            bg = _gradient_bg(video_width, video_height, palette[0], palette[1])
         words   = text.split()
 
         # Incremental wrap cache: wrap_cache[n] = wrapped lines using only
@@ -534,11 +612,64 @@ def compile_story_video(
     video_clip.close()
     log.info("Subtitle render done → %s", tmp_nowave)
 
-    # ── Step B: overlay waveform loop via ffmpeg screen-blend ────────────────
+    # ── Step B1: video background (only when bg_mode == "video") ─────────────
+    # The subtitle render (tmp_nowave) was produced on a gradient bg.
+    # For video mode we composite the real background video BEHIND the
+    # subtitle layer using ffmpeg's overlay filter with a luma-key so the
+    # gradient background becomes transparent, leaving only the text visible.
+    #
+    # Strategy:
+    #   [bg_video]  looped to total_dur, scaled to fill frame
+    #   [subtitle]  our rendered video (gradient bg + text)
+    #   overlay with lumakey: removes the dark gradient, keeps bright text
+    #   Result: real video background + bright subtitle text on top
+    tmp_bg_applied = tmp_nowave   # will be replaced if video bg is used
+    if bg_mode == "video":
+        tmp_bg_applied = output_path.replace(".mp4", "_bgvideo.mp4")
+        log.info("Compositing background video: %s …", bg_video_path)
+
+        # lumakey threshold: gradient bg pixels are dark (<0.25 luma),
+        # text pixels are bright (>0.8). This removes the bg cleanly.
+        # For very dark text on light bg, invert with chromakey instead.
+        luma_thresh = float(getattr(cfg, "STORY_BG_VIDEO_LUMA_KEY",  0.20))
+        luma_tol    = float(getattr(cfg, "STORY_BG_VIDEO_LUMA_TOL",  0.12))
+        bg_video_dim = float(getattr(cfg, "STORY_BG_DIM", 0.45))
+
+        bg_filter = (
+            # Scale bg video to fill frame (cover), loop it
+            f"[1:v]scale={video_width}:{video_height}:force_original_aspect_ratio=increase,"
+            f"crop={video_width}:{video_height},"
+            f"eq=brightness={bg_video_dim - 1.0:.2f},"   # dim it (eq brightness: -1..1)
+            f"format=rgb24[bg];"
+            # Make subtitle layer RGBA, luma-key out the dark gradient bg
+            f"[0:v]format=rgba,"
+            f"lumakey=threshold={luma_thresh}:tolerance={luma_tol}:softness=0.05[fg];"
+            # Overlay fg on top of bg video
+            f"[bg][fg]overlay=format=auto,"
+            f"format=yuv420p[out]"
+        )
+        bg_cmd = [
+            "ffmpeg", "-y",
+            "-i", tmp_nowave,           # [0] subtitle render
+            "-stream_loop", "-1",
+            "-i", bg_video_path,        # [1] background video (looped)
+            "-filter_complex", bg_filter,
+            "-map", "[out]",
+            "-c:v", cfg.VIDEO_CODEC, "-preset", "fast", "-crf", "18",
+            "-t", str(total_dur),
+            tmp_bg_applied,
+        ]
+        r = subprocess.run(bg_cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            log.warning("Video background composite failed; using gradient: %s",
+                        r.stderr[-400:])
+            tmp_bg_applied = tmp_nowave
+
+    # ── Step B2: overlay waveform loop via ffmpeg screen-blend ───────────────
     tmp_waved = output_path.replace(".mp4", "_waved.mp4")
     wf_cmd = [
         "ffmpeg", "-y",
-        "-i", tmp_nowave,
+        "-i", tmp_bg_applied,
         "-stream_loop", "-1",
         "-i", wf_loop,
         "-filter_complex",
@@ -554,8 +685,8 @@ def compile_story_video(
     ]
     r = subprocess.run(wf_cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        log.warning("Waveform overlay failed, using plain video: %s", r.stderr[-300:])
-        tmp_waved = tmp_nowave
+        log.warning("Waveform overlay failed, using video without waveform: %s", r.stderr[-300:])
+        tmp_waved = tmp_bg_applied
 
     # ── Step C: mux audio (optionally mixed with ducked background music) ────
     bg_music = getattr(cfg, "STORY_BG_MUSIC", None)
@@ -610,8 +741,9 @@ def compile_story_video(
         ]
         subprocess.run(mux_cmd, check=True, capture_output=True)
 
-    # Cleanup
-    for tmp in [tmp_nowave, tmp_waved]:
+    # Cleanup temp files
+    for tmp in [tmp_nowave, tmp_waved,
+                output_path.replace(".mp4", "_bgvideo.mp4")]:
         if tmp != output_path and os.path.exists(tmp):
             try:
                 os.remove(tmp)
