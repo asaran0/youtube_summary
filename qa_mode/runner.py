@@ -612,6 +612,12 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
         if para.startswith("\u0001CODE\u0001"):
             result.extend(_decode_code_block_lines(para))
             continue
+        if para.startswith("(\U0001F4A1)"):  # (💡) explanation callout
+            para = para[len("(\U0001F4A1)"):].strip()
+            result.append("\u0001EXP\u0001")
+            lines = _wrap_text_px(para, font, max_width)
+            result.extend(lines)
+            continue
         lines = _wrap_text_px(para, font, max_width)
         result.extend(lines)
     return result or [""]
@@ -647,8 +653,8 @@ def _paginate_paras(para_lines: list, max_lines: int) -> list[list]:
         return [[]]
     pages, current, line_count = [], [], 0
     for item in para_lines:
-        if item is None:
-            current.append(None)
+        if item is None or item == "\u0001EXP\u0001":
+            current.append(item)
         else:
             if line_count >= max_lines:
                 pages.append(current)
@@ -661,11 +667,14 @@ def _paginate_paras(para_lines: list, max_lines: int) -> list[list]:
 
 
 def _count_para_words(para_lines: list) -> int:
-    """Count words across a page of para_lines (skip None markers and code lines)."""
+    """Count words across a page of para_lines (skip None markers, code
+    lines, and the EXP callout marker — none of these carry spoken words)."""
     from qa_mode.qa_slideshow import _text_tokens
     return sum(
         1 for item in para_lines
-        if item is not None and not item.startswith("\u0001CL\u0001")
+        if item is not None
+        and item != "\u0001EXP\u0001"
+        and not item.startswith("\u0001CL\u0001")
         for t in _text_tokens(item) if t.strip()
     )
 
@@ -939,12 +948,15 @@ def _render_slide_paragraphs(
     y             = q_band_h + margin_top_a
     word_index    = 0
     BULLET        = "● "          # filled circle bullet
+    EXPLAIN_BULLET = "\u00BB "    # »  — distinct bullet for code explanations (font-safe, unlike emoji)
     BULLET_INDENT = 28            # px indent for continuation lines of same paragraph
     bullet_color  = highlight_color   # bullet shares accent colour
+    explain_color = (110, 190, 230)   # soft cyan-blue — visually distinct from normal prose
     # We draw a bullet at the start of each paragraph (first line after a
     # None separator, or the very first line). Continuation lines of the
     # same paragraph are indented to align with the text after the bullet.
-    start_of_para = True          # True = next rendered line is a para start
+    start_of_para   = True        # True = next rendered line is a para start
+    explanation_mode = False      # True while rendering a (💡) code-explanation paragraph
     # Hard bottom boundary — never draw below this y coordinate.
     # This enforces QA_SLIDE_MARGIN_BOT_A regardless of pagination drift.
     y_max = q_band_h + a_band_h - margin_bot_a
@@ -953,6 +965,10 @@ def _render_slide_paragraphs(
         if item is None:
             y += para_gap
             start_of_para = True  # next line starts a new paragraph
+            explanation_mode = False
+            continue
+        if item == "\u0001EXP\u0001":
+            explanation_mode = True
             continue
         line = item
 
@@ -975,8 +991,10 @@ def _render_slide_paragraphs(
 
         if start_of_para:
             # Draw bullet glyph before the line content
-            bw = _text_width(draw, BULLET, font_a)
-            draw.text((margin_side, y), BULLET, font=font_a, fill=bullet_color)
+            bullet = EXPLAIN_BULLET if explanation_mode else BULLET
+            bcol   = explain_color if explanation_mode else bullet_color
+            bw = _text_width(draw, bullet, font_a)
+            draw.text((margin_side, y), bullet, font=font_a, fill=bcol)
             x = margin_side + bw
             start_of_para = False
         else:
@@ -986,7 +1004,12 @@ def _render_slide_paragraphs(
         tokens = _text_tokens(line)
         for token in tokens:
             is_word = bool(token.strip())
-            color = highlight_color if (is_word and word_index == active_word) else a_color
+            if is_word and word_index == active_word:
+                color = highlight_color
+            elif explanation_mode:
+                color = explain_color
+            else:
+                color = a_color
             draw.text((x, y), token, font=font_a, fill=color)
             x += _text_width(draw, token, font_a)
             if is_word:

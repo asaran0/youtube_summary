@@ -39,6 +39,20 @@ _CODE_TAG       = "\u0001CODE\u0001"
 
 _FENCE_RE = re.compile(r"```([A-Za-z0-9_+-]*)[ \t]*\n?(.*?)```", re.DOTALL)
 
+# Optional explanation right after a fence, written as a markdown blockquote:
+#   ```bash
+#   git revert <commit-id>
+#   ```
+#   > This undoes the buggy commit by creating a new one that reverses it.
+# Captures one or more consecutive "> ..." lines immediately following the
+# closing fence (allowing blank lines/whitespace right after the fence).
+_EXPLAIN_RE = re.compile(r"^[ \t]*\n*((?:^[ \t]*>[^\n]*\n?)+)", re.MULTILINE)
+
+# Marker prepended to an explanation paragraph's display text — wrapped in
+# parens so the EXISTING paren-stripping logic makes it invisible to TTS
+# (the explanation sentence itself, after the marker, is fully spoken).
+_EXPLAIN_MARKER = "(\U0001F4A1)"  # (💡)
+
 
 def _encode_code_block(lang: str, code: str) -> str:
     """Pack a fenced code block into one sentinel-delimited token that
@@ -50,10 +64,28 @@ def _encode_code_block(lang: str, code: str) -> str:
     return _CODE_TAG + (lang or "") + _CODE_FIELD_SEP + _CODE_LINE_SEP.join(lines)
 
 
+def _take_explanation(text_after_fence: str) -> tuple[str, int]:
+    """
+    If `text_after_fence` starts with one or more '> ...' blockquote lines
+    (the spoken explanation for the code block just above), return
+    (explanation_text, chars_consumed). Otherwise ("", 0).
+    """
+    m = _EXPLAIN_RE.match(text_after_fence)
+    if not m:
+        return "", 0
+    block = m.group(1)
+    lines = [ln.split(">", 1)[1].strip() for ln in block.splitlines() if ">" in ln]
+    explanation = " ".join(ln for ln in lines if ln)
+    return explanation, m.end()
+
+
 def _split_text_and_code(raw_answer: str) -> list[tuple[str, str]]:
     """
     Split a raw answer (with its original line breaks still intact) into
     an ordered list of ("text", chunk) / ("code", encoded_block) parts.
+    A code block may be followed by a "> explanation" blockquote, which
+    becomes its own ("text", "(💡) ...") part — spoken normally by TTS
+    and shown as a distinct callout right under the code card.
     Must run BEFORE any whitespace collapsing, or multi-line code is lost.
     """
     parts: list[tuple[str, str]] = []
@@ -64,6 +96,11 @@ def _split_text_and_code(raw_answer: str) -> list[tuple[str, str]]:
         lang, code = m.group(1), m.group(2)
         parts.append(("code", _encode_code_block(lang, code)))
         pos = m.end()
+
+        explanation, consumed = _take_explanation(raw_answer[pos:])
+        if explanation:
+            parts.append(("explain", explanation))
+            pos += consumed
     if pos < len(raw_answer):
         parts.append(("text", raw_answer[pos:]))
     return parts
@@ -223,6 +260,16 @@ def load_qa_file(path: str, cfg) -> list[dict]:
         for kind, content in parts:
             if kind == "code":
                 display_chunks.append(content)   # opaque sentinel token, kept as-is
+            elif kind == "explain":
+                collapsed = " ".join(content.split())
+                if not collapsed:
+                    continue
+                spoken_chunks.append(collapsed)  # spoken in full, naturally
+                # Kept as ONE paragraph (not sentence-split) so the whole
+                # explanation stays grouped under the code card. The
+                # (💡) marker is invisible to TTS (existing paren-strip
+                # logic), and flags this paragraph for callout styling.
+                display_chunks.append(f"{_EXPLAIN_MARKER} {collapsed}")
             else:
                 collapsed = " ".join(content.split())
                 if not collapsed:
