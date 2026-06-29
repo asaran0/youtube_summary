@@ -26,6 +26,47 @@ Key behaviours:
 """
 
 import re
+import textwrap
+
+# Sentinel used to encode a code block as a single opaque "word" inside
+# display_text, so the word-by-word reveal machinery (which operates on
+# whitespace-split tokens) treats the whole block as one unit instead of
+# shredding its line breaks. \u0001/\u0002 are control chars that will
+# never appear in real question/answer text.
+_CODE_FIELD_SEP = "\u0001"
+_CODE_LINE_SEP  = "\u0002"
+_CODE_TAG       = "\u0001CODE\u0001"
+
+_FENCE_RE = re.compile(r"```([A-Za-z0-9_+-]*)[ \t]*\n?(.*?)```", re.DOTALL)
+
+
+def _encode_code_block(lang: str, code: str) -> str:
+    """Pack a fenced code block into one sentinel-delimited token that
+    survives whitespace collapsing and .split() intact."""
+    # Dedent (removes common leading whitespace) but keep relative
+    # indentation — important for Python/Java, harmless for bash/git.
+    code = textwrap.dedent(code).strip("\n")
+    lines = [ln.rstrip() for ln in code.split("\n")]
+    return _CODE_TAG + (lang or "") + _CODE_FIELD_SEP + _CODE_LINE_SEP.join(lines)
+
+
+def _split_text_and_code(raw_answer: str) -> list[tuple[str, str]]:
+    """
+    Split a raw answer (with its original line breaks still intact) into
+    an ordered list of ("text", chunk) / ("code", encoded_block) parts.
+    Must run BEFORE any whitespace collapsing, or multi-line code is lost.
+    """
+    parts: list[tuple[str, str]] = []
+    pos = 0
+    for m in _FENCE_RE.finditer(raw_answer):
+        if m.start() > pos:
+            parts.append(("text", raw_answer[pos:m.start()]))
+        lang, code = m.group(1), m.group(2)
+        parts.append(("code", _encode_code_block(lang, code)))
+        pos = m.end()
+    if pos < len(raw_answer):
+        parts.append(("text", raw_answer[pos:]))
+    return parts
 
 
 # ── Text helpers ──────────────────────────────────────────────────────────────
@@ -111,7 +152,6 @@ def load_qa_file(path: str, cfg) -> list[dict]:
 
     for q_num, (num, question, answer) in enumerate(pairs, start=1):
         question = " ".join(question.split())
-        answer_raw = " ".join(answer.split())
 
         # Resolve the question number FIRST — use the explicit number from
         # Q97:, Q98:, Q99: etc. (series number), fall back to loop index
@@ -172,10 +212,26 @@ def load_qa_file(path: str, cfg) -> list[dict]:
         # seg_id += 1
 
         # ── Answer ───────────────────────────────────────────────────────
-        # text       → TTS speaks this (parens stripped)
-        # display_text → shown on screen (parens kept, formatted into paragraphs)
-        spoken_text  = _strip_parens(answer_raw)
-        display_text = _format_answer_display(answer_raw)
+        # text       → TTS speaks this (parens AND code blocks stripped —
+        #              code is never read aloud, it's shown as a visual card)
+        # display_text → shown on screen (parens kept, code blocks kept
+        #              intact with original line breaks, formatted into
+        #              paragraphs)
+        parts = _split_text_and_code(answer)  # use ORIGINAL (uncollapsed) answer
+        spoken_chunks  = []
+        display_chunks = []
+        for kind, content in parts:
+            if kind == "code":
+                display_chunks.append(content)   # opaque sentinel token, kept as-is
+            else:
+                collapsed = " ".join(content.split())
+                if not collapsed:
+                    continue
+                spoken_chunks.append(_strip_parens(collapsed))
+                display_chunks.append(_format_answer_display(collapsed))
+
+        spoken_text  = " ".join(c for c in spoken_chunks if c)
+        display_text = "\n\n".join(c for c in display_chunks if c)
 
         segments.append({
             "id": seg_id,

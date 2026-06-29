@@ -46,7 +46,7 @@ STORY_VOICE_GENDER = "male"   # "male" or "female"
 # ── Kokoro TTS settings for story mode ───────────────────────────────────────
 # Slower speed makes narration feel more emotional and human.
 # 0.82 = ~18% slower than natural — warm storytelling pace.
-KOKORO_SPEED = 0.92
+KOKORO_SPEED = 0.82
 
 # Voice options per language/gender — change STORY_VOICE_GENDER above to switch.
 # English male options : am_adam (deep) | am_michael (warm) | am_onyx (rich)
