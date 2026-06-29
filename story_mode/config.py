@@ -235,9 +235,34 @@ def video_dimensions() -> tuple[int, int]:
 # ─────────────────────────────────────────────────────────────
 
 # ── Background ───────────────────────────────────────────────
-# Set to a video file path to use as looping background.
-# Leave empty ("") to use animated gradient backgrounds (default).
-STORY_BG_VIDEO = ""
+# ── Background mode ──────────────────────────────────────────────────────────
+# STORY_BG_MODE controls what appears behind the subtitle text:
+#
+#   "gradient"  — animated colour gradient per sentence (default, zero setup)
+#   "image"     — static photo/illustration (blur+dim applied automatically)
+#   "video"     — looping video clip behind subtitles (most cinematic)
+#
+STORY_BG_MODE  = "image"    # "gradient" | "image" | "video"
+
+# Path to background image (used when STORY_BG_MODE = "image")
+# Supports JPG, PNG, WebP. Will be scaled to fill the frame (cover mode).
+STORY_BG_IMAGE = "background/reel_bg.png"            # e.g. "assets/backgrounds/forest.jpg"
+
+# Path to background video (used when STORY_BG_MODE = "video")
+# Will be looped automatically to match narration duration.
+STORY_BG_VIDEO = ""            # e.g. "assets/backgrounds/nature_loop.mp4"
+
+# Common settings for image and video backgrounds:
+STORY_BG_BLUR  = 0            # Gaussian blur radius (0 = no blur)
+STORY_BG_DIM   = 0.9          # Brightness multiplier (0=black, 1=original)
+                                # 0.45 = 55% darker — keeps text legible
+
+# Video background: lumakey settings for removing gradient background
+# The subtitle render uses dark gradients; lumakey removes dark areas so
+# only bright text remains to composite onto the real video.
+# Adjust if text or background bleeds through:
+STORY_BG_VIDEO_LUMA_KEY = 0.20  # pixels darker than this are removed (0-1)
+STORY_BG_VIDEO_LUMA_TOL = 0.12  # softness of the key edge
 
 # ── Subtitle text ────────────────────────────────────────────
 # Large bold text shown word-by-word in the centre of the screen.
@@ -264,8 +289,9 @@ STORY_WAVEFORM_BG_ALPHA     = 70    # strip transparency (0=invisible, 255=solid
 # ── Background music (optional, ducked under narration) ───────
 # Point this at a local royalty-free music file (mp3/wav) to add ambience.
 # Leave as None to render with narration + waveform only (current behaviour).
-STORY_BG_MUSIC              = None   # e.g. "assets/music/cinematic_loop.mp3"
-STORY_BG_MUSIC_VOLUME_DB    = -22    # music level before ducking (negative = quieter)
+# STORY_BG_MUSIC              = None   # e.g. "assets/music/cinematic_loop.mp3"
+STORY_BG_MUSIC              = "background/cinematic.mp3"   # e.g. "assets/music/cinematic_loop.mp3"
+STORY_BG_MUSIC_VOLUME_DB    = 5    # music level before ducking (negative = quieter)
 STORY_BG_MUSIC_DUCK         = True   # auto-lower music under narration via sidechain compression
 
 # Use new story renderer instead of legacy subtitle-overlay approach

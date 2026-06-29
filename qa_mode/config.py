@@ -12,7 +12,7 @@ LANGUAGE = "en"
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
 # ─────────────────────────────────────────────────────────────
-OUTPUT_MODE = "full"
+OUTPUT_MODE = "reel"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
