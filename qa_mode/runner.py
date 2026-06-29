@@ -43,6 +43,11 @@ def _build_display_tokens(text: str) -> list[tuple[str, bool]]:
         para = para.strip()
         if not para:
             continue
+        if para.startswith("\u0001CODE\u0001"):
+            # Code block: keep as ONE opaque token so it reveals as a whole
+            # unit (it isn't spoken word-by-word, just shown once reached).
+            tokens.append((para, pi > 0))
+            continue
         words = para.split()
         for wi, word in enumerate(words):
             is_break = (pi > 0 and wi == 0)   # first word of a non-first paragraph
@@ -604,9 +609,37 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
             continue
         if pi > 0:
             result.append(None)
+        if para.startswith("\u0001CODE\u0001"):
+            result.extend(_decode_code_block_lines(para))
+            continue
         lines = _wrap_text_px(para, font, max_width)
         result.extend(lines)
     return result or [""]
+
+
+def _decode_code_block_lines(encoded: str) -> list[str]:
+    """
+    Turn a sentinel-encoded code block ("\\u0001CODE\\u0001{lang}\\u0001{lines...}")
+    into a list of "\\u0001CL\\u0001{position}\\u0001{lang}\\u0001{line_text}"
+    marker strings — one per code line — that _render_slide_paragraphs and
+    _count_para_words know how to recognise and render/count specially.
+    """
+    body = encoded[len("\u0001CODE\u0001"):]
+    lang, _, rest = body.partition("\u0001")
+    lines = rest.split("\u0002") if rest else [""]
+    out = []
+    n = len(lines)
+    for i, line_text in enumerate(lines):
+        if n == 1:
+            pos = "only"
+        elif i == 0:
+            pos = "first"
+        elif i == n - 1:
+            pos = "last"
+        else:
+            pos = "mid"
+        out.append(f"\u0001CL\u0001{pos}\u0001{lang}\u0001{line_text}")
+    return out
 
 def _paginate_paras(para_lines: list, max_lines: int) -> list[list]:
     """Paginate para_lines (strings + None markers) respecting max_lines."""
@@ -628,10 +661,11 @@ def _paginate_paras(para_lines: list, max_lines: int) -> list[list]:
 
 
 def _count_para_words(para_lines: list) -> int:
-    """Count words across a page of para_lines (skip None markers)."""
+    """Count words across a page of para_lines (skip None markers and code lines)."""
     from qa_mode.qa_slideshow import _text_tokens
     return sum(
-        1 for item in para_lines if item is not None
+        1 for item in para_lines
+        if item is not None and not item.startswith("\u0001CL\u0001")
         for t in _text_tokens(item) if t.strip()
     )
 
@@ -685,6 +719,98 @@ def _spoken_to_display_idx(spoken_idx: int, spoken_words: list, display_words: l
             spoken_count += 1
 
     return len(display_words) - 1
+
+
+# ── Code-block rendering (monospace card with terminal-style header) ────────
+
+_MONO_FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
+    "/System/Library/Fonts/Menlo.ttc",
+    "/System/Library/Fonts/Supplemental/Courier New.ttf",
+    "/Library/Fonts/Courier New.ttf",
+]
+
+_MONO_FONT_CACHE: dict = {}
+
+
+def _get_mono_font(size: int):
+    if size in _MONO_FONT_CACHE:
+        return _MONO_FONT_CACHE[size]
+    from PIL import ImageFont
+    font = None
+    for p in _MONO_FONT_CANDIDATES:
+        if os.path.exists(p):
+            try:
+                font = ImageFont.truetype(p, size=size)
+                break
+            except Exception:
+                continue
+    if font is None:
+        font = ImageFont.load_default()
+    _MONO_FONT_CACHE[size] = font
+    return font
+
+
+def _rounded_rect(draw, box, radius, fill, corners=(True, True, True, True)):
+    """rounded_rectangle with selective corners; falls back to a plain
+    rectangle on Pillow versions too old to support the `corners` kwarg."""
+    try:
+        draw.rounded_rectangle(box, radius=radius, fill=fill, corners=corners)
+    except TypeError:
+        draw.rectangle(box, fill=fill)
+
+
+def _draw_code_line(draw, marker: str, x0: int, y: int, video_width: int,
+                     y_max: int, line_h: int) -> int:
+    """
+    Draw one line of a code block (terminal-style card). `marker` is
+    "\\u0001CL\\u0001{pos}\\u0001{lang}\\u0001{line_text}" where pos is
+    one of first/mid/last/only. Returns the new y cursor.
+    """
+    from qa_mode.qa_slideshow import _text_width, _line_height
+
+    body = marker[len("\u0001CL\u0001"):]
+    pos, lang, line_text = body.split("\u0001", 2)
+
+    card_bg    = (32, 34, 40)
+    header_bg  = (24, 25, 30)
+    text_color = (210, 230, 210)
+    lang_color = (150, 160, 175)
+    pad_x      = 18
+    radius     = 14
+
+    card_w = video_width - 2 * x0
+    top_rounded    = pos in ("first", "only")
+    bottom_rounded = pos in ("last", "only")
+
+    mono_size = max(16, int(line_h * 0.62))
+    font = _get_mono_font(mono_size)
+    fh   = _line_height(font)
+
+    if top_rounded:
+        header_h = fh + 14
+        _rounded_rect(draw, [x0, y, x0 + card_w, y + header_h], radius,
+                      fill=header_bg, corners=(True, True, False, False))
+        dot_r = max(4, header_h // 7)
+        dot_y = y + header_h // 2
+        for i, col in enumerate([(255, 95, 86), (255, 189, 46), (39, 201, 63)]):
+            cx = x0 + pad_x + i * (dot_r * 2 + 6) + dot_r
+            draw.ellipse([cx - dot_r, dot_y - dot_r, cx + dot_r, dot_y + dot_r], fill=col)
+        if lang:
+            lw = _text_width(draw, lang, font)
+            draw.text((x0 + card_w - pad_x - lw, dot_y - fh // 2),
+                      lang, font=font, fill=lang_color)
+        y += header_h
+
+    row_h = fh + 14
+    if y + row_h > y_max:
+        return y  # out of room — caller already guards this, just be safe
+    _rounded_rect(draw, [x0, y, x0 + card_w, y + row_h], radius,
+                  fill=card_bg, corners=(False, False, bottom_rounded, bottom_rounded))
+    draw.text((x0 + pad_x, y + 7), line_text, font=font, fill=text_color)
+    return y + row_h
 
 
 # ── Paragraph-aware slide renderer ───────────────────────────────────────────
@@ -830,12 +956,21 @@ def _render_slide_paragraphs(
             continue
         line = item
 
+        if line.startswith("\u0001CL\u0001"):
+            if y + a_lh > y_max:
+                continue  # 0 spoken words, safe to just skip — nothing to sync
+            y = _draw_code_line(draw, line, x0=margin_side, y=y,
+                                video_width=video_width, y_max=y_max,
+                                line_h=a_lh)
+            start_of_para = True  # prose after code starts fresh (gets a bullet)
+            continue
+
         # Skip this line entirely if it would overflow the bottom margin
         if y + a_lh > y_max:
-            if is_word := False: pass   # keep word_index in sync below
-            for token in _text_tokens(line):
-                if token.strip():
-                    word_index += 1
+            if not line.startswith("\u0001CL\u0001"):
+                for token in _text_tokens(line):
+                    if token.strip():
+                        word_index += 1
             continue
 
         if start_of_para:
