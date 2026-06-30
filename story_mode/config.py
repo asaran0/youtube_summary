@@ -16,7 +16,7 @@ MODE_NAME = "story"
 # "hi"  pure Hindi (English loanwords/acronyms transliterated)
 # "en"  pure English (no transliteration)
 # "hig" Hinglish — mixed Hindi/English, same transliteration as "hi"
-LANGUAGE = "hi"
+LANGUAGE = "hig"
 
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
@@ -239,21 +239,35 @@ def video_dimensions() -> tuple[int, int]:
 # STORY_BG_MODE controls what appears behind the subtitle text:
 #
 #   "gradient"  — animated colour gradient per sentence (default, zero setup)
-#   "image"     — static photo/illustration (blur+dim applied automatically)
-#   "video"     — looping video clip behind subtitles (most cinematic)
+#   "image"     — photo slideshow: one image per chunk, crossfade between them
+#   "video"     — video playlist looped behind subtitles (most cinematic)
 #
 STORY_BG_MODE  = "image"    # "gradient" | "image" | "video"
 
-# Path to background image (used when STORY_BG_MODE = "image")
-# Supports JPG, PNG, WebP. Will be scaled to fill the frame (cover mode).
-STORY_BG_IMAGE = "background/reel_bg.png"            # e.g. "assets/backgrounds/forest.jpg"
+# ── Image background ──────────────────────────────────────────────────────────
+# Single image — used for every chunk:
+STORY_BG_IMAGE  = "background/reel_bg.png"               # e.g. "assets/backgrounds/forest.jpg"
 
-# Path to background video (used when STORY_BG_MODE = "video")
-# Will be looped automatically to match narration duration.
-STORY_BG_VIDEO = ""            # e.g. "assets/backgrounds/nature_loop.mp4"
+# Multiple images — slideshow, one per chunk (cycles if fewer images than
+# chunks), with smooth crossfade transitions between them:
+STORY_BG_IMAGES = []             # e.g. ["assets/bg/1.jpg", "assets/bg/2.jpg"]
+
+# ── Video background ──────────────────────────────────────────────────────────
+# Single video — looped for the whole narration:
+STORY_BG_VIDEO  = ""             # e.g. "assets/backgrounds/nature_loop.mp4"
+
+# Multiple videos — concatenated into a playlist, then looped as needed:
+STORY_BG_VIDEOS = []             # e.g. ["assets/bg/clip1.mp4", "assets/bg/clip2.mp4"]
+
+# Auto-scan: if both the single path AND the list are empty, automatically
+# pick up every image/video file found in this folder (sorted by filename):
+STORY_BG_DIR = "background"
+
+# Crossfade duration between images in slideshow mode (seconds)
+STORY_BG_SLIDESHOW_XFADE = 0.6
 
 # Common settings for image and video backgrounds:
-STORY_BG_BLUR  = 0            # Gaussian blur radius (0 = no blur)
+STORY_BG_BLUR  = 1            # Gaussian blur radius (0 = no blur)
 STORY_BG_DIM   = 0.9          # Brightness multiplier (0=black, 1=original)
                                 # 0.45 = 55% darker — keeps text legible
 
@@ -291,7 +305,7 @@ STORY_WAVEFORM_BG_ALPHA     = 70    # strip transparency (0=invisible, 255=solid
 # Leave as None to render with narration + waveform only (current behaviour).
 # STORY_BG_MUSIC              = None   # e.g. "assets/music/cinematic_loop.mp3"
 STORY_BG_MUSIC              = "background/cinematic.mp3"   # e.g. "assets/music/cinematic_loop.mp3"
-STORY_BG_MUSIC_VOLUME_DB    = 5    # music level before ducking (negative = quieter)
+STORY_BG_MUSIC_VOLUME_DB    = 2    # music level before ducking (negative = quieter)
 STORY_BG_MUSIC_DUCK         = True   # auto-lower music under narration via sidechain compression
 
 # Use new story renderer instead of legacy subtitle-overlay approach
