@@ -44,10 +44,13 @@ def _build_display_tokens(text: str) -> list[tuple[str, bool]]:
         if not para:
             continue
         if para.startswith("\u0001CODE\u0001"):
-            # Code block: keep as ONE opaque token so it reveals as a whole
-            # unit (it isn't spoken word-by-word, just shown once reached).
+            # Legacy SILENT code block (no '##' lines): keep as ONE opaque
+            # token so it reveals as a whole unit (never spoken word-by-word).
             tokens.append((para, pi > 0))
             continue
+        # Walkthrough code-line / comment paragraphs (\u0010 / \u0011 prefix)
+        # are real spoken text — fall through to normal word tokenizing below
+        # so they reveal/highlight word-by-word like any other paragraph.
         words = para.split()
         for wi, word in enumerate(words):
             is_break = (pi > 0 and wi == 0)   # first word of a non-first paragraph
@@ -600,7 +603,7 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
     as a separator marker. Consumers check `if item is None` to add
     extra vertical spacing (paragraph gap).
     """
-    from qa_mode.qa_slideshow import _wrap_text_px
+    from qa_mode.qa_slideshow import _wrap_text_px, _line_height
     result = []
     paragraphs = re.split(r'\n\n+', text)
     for pi, para in enumerate(paragraphs):
@@ -612,7 +615,24 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
         if para.startswith("\u0001CODE\u0001"):
             result.extend(_decode_code_block_lines(para))
             continue
-        if para.startswith("(\U0001F4A1)"):  # (💡) explanation callout
+        if para.startswith("\u0010"):  # walkthrough code line (spoken, real words)
+            from qa_mode.qa_slideshow import _wrap_text_px as _wrap_mono
+            rest = para[1:]
+            lang = ""
+            if "\u0013" in rest:
+                lang, _, rest = rest.partition("\u0013")
+            mono_font = _get_mono_font(max(16, int(_line_height(font) * 0.62)))
+            for ln in _wrap_mono(rest, mono_font, max_width):
+                result.append(f"\u0001CW\u0001{lang}\u0001{ln}")
+                lang = ""  # only the first wrapped line carries the lang tag
+            continue
+        if para.startswith("\u0011"):  # walkthrough comment (spoken, distinct colour)
+            para = para[1:].strip()
+            result.append("\u0001EXP\u0001")
+            lines = _wrap_text_px(para, font, max_width)
+            result.extend(lines)
+            continue
+        if para.startswith("(\U0001F4A1)"):  # (💡) final-summary explanation callout
             para = para[len("(\U0001F4A1)"):].strip()
             result.append("\u0001EXP\u0001")
             lines = _wrap_text_px(para, font, max_width)
@@ -822,6 +842,74 @@ def _draw_code_line(draw, marker: str, x0: int, y: int, video_width: int,
     return y + row_h
 
 
+def _code_walkthrough_row_height(line_h: int, has_lang: bool) -> int:
+    """Total pixel height a walkthrough code-line card will occupy
+    (used to check bottom-margin overflow before actually drawing it)."""
+    mono_size = max(16, int(line_h * 0.62))
+    font = _get_mono_font(mono_size)
+    from qa_mode.qa_slideshow import _line_height
+    fh = _line_height(font)
+    row_h = fh + 14
+    return row_h + (row_h if has_lang else 0)
+
+
+def _draw_code_walkthrough_line(draw, lang: str, code_text: str, x0: int, y: int,
+                                 video_width: int, line_h: int,
+                                 word_index: int, active_word: int,
+                                 highlight_color: tuple) -> tuple[int, int]:
+    """
+    Draw ONE spoken/highlighted code line as its own self-contained rounded
+    card (terminal-style header + dots shown only when `lang` is non-empty,
+    i.e. the first line of a block). Each word is drawn individually so the
+    currently-spoken word can be highlighted, same as normal prose.
+    Returns (new_y, new_word_index).
+    """
+    from qa_mode.qa_slideshow import _text_width, _line_height, _text_tokens
+
+    card_bg    = (32, 34, 40)
+    header_bg  = (24, 25, 30)
+    text_color = (210, 230, 210)
+    lang_color = (150, 160, 175)
+    pad_x      = 18
+    radius     = 14
+    card_w     = video_width - 2 * x0
+
+    mono_size = max(16, int(line_h * 0.62))
+    font = _get_mono_font(mono_size)
+    fh   = _line_height(font)
+
+    if lang:
+        header_h = fh + 14
+        _rounded_rect(draw, [x0, y, x0 + card_w, y + header_h], radius,
+                      fill=header_bg, corners=(True, True, False, False))
+        dot_r = max(4, header_h // 7)
+        dot_y = y + header_h // 2
+        for i, col in enumerate([(255, 95, 86), (255, 189, 46), (39, 201, 63)]):
+            cx = x0 + pad_x + i * (dot_r * 2 + 6) + dot_r
+            draw.ellipse([cx - dot_r, dot_y - dot_r, cx + dot_r, dot_y + dot_r], fill=col)
+        lw = _text_width(draw, lang, font)
+        draw.text((x0 + card_w - pad_x - lw, dot_y - fh // 2),
+                  lang, font=font, fill=lang_color)
+        y += header_h
+        top_rounded = False  # header already drew the rounded top
+    else:
+        top_rounded = True
+
+    row_h = fh + 14
+    _rounded_rect(draw, [x0, y, x0 + card_w, y + row_h], radius,
+                  fill=card_bg, corners=(top_rounded, top_rounded, True, True))
+
+    x = x0 + pad_x
+    for token in _text_tokens(code_text):
+        is_word = bool(token.strip())
+        color = highlight_color if (is_word and word_index == active_word) else text_color
+        draw.text((x, y + 7), token, font=font, fill=color)
+        x += _text_width(draw, token, font)
+        if is_word:
+            word_index += 1
+    return y + row_h, word_index
+
+
 # ── Paragraph-aware slide renderer ───────────────────────────────────────────
 
 def _render_slide_paragraphs(
@@ -971,6 +1059,24 @@ def _render_slide_paragraphs(
             explanation_mode = True
             continue
         line = item
+
+        if line.startswith("\u0001CW\u0001"):
+            body = line[len("\u0001CW\u0001"):]
+            lang, _, code_text = body.partition("\u0001")
+            needed_h = _code_walkthrough_row_height(a_lh, bool(lang))
+            if y + needed_h > y_max:
+                for token in _text_tokens(code_text):
+                    if token.strip():
+                        word_index += 1
+                continue
+            y, word_index = _draw_code_walkthrough_line(
+                draw, lang, code_text, x0=margin_side, y=y,
+                video_width=video_width, line_h=a_lh,
+                word_index=word_index, active_word=active_word,
+                highlight_color=highlight_color,
+            )
+            start_of_para = True  # next paragraph (comment/prose) starts fresh
+            continue
 
         if line.startswith("\u0001CL\u0001"):
             if y + a_lh > y_max:
