@@ -77,7 +77,7 @@ TTS_ANSWER_PAUSE_EXTRA     = 0.0   # no pause before answer begins
 # fights the voice.
 BACKGROUND_MUSIC_ENABLED = True
 BACKGROUND_MUSIC_PATH = "background/cinematic.mp3"
-BACKGROUND_MUSIC_VOLUME_DB = 2.0   # base bed level — raise toward -16 for more presence, lower toward -28 for subtler
+BACKGROUND_MUSIC_VOLUME_DB = 5.0   # base bed level — raise toward -16 for more presence, lower toward -28 for subtler
 BACKGROUND_MUSIC_DUCK_RATIO = 20.0   # how hard music drops under speech — lower toward 6-10 for a gentler duck
 
 AUDIO_POST_PROCESSING = True
