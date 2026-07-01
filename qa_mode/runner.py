@@ -602,6 +602,11 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
     Returns a flat list of str lines with None inserted between paragraphs
     as a separator marker. Consumers check `if item is None` to add
     extra vertical spacing (paragraph gap).
+
+    Walkthrough code/comment rows (\u0010 / \u0011 prefixed) are special:
+    consecutive rows belonging to the SAME code block are never separated
+    by a None gap, so the renderer can draw them as one continuous card
+    (VS-Code style) instead of floating separately.
     """
     from qa_mode.qa_slideshow import _wrap_text_px, _line_height
     result = []
@@ -610,34 +615,39 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
         para = para.strip()
         if not para:
             continue
-        if pi > 0:
+
+        is_walk_row = para.startswith("\u0010") or para.startswith("\u0011")
+        row_pos = para[1:].split("\u0014", 1)[0] if is_walk_row else None
+        continues_card = is_walk_row and row_pos in ("mid", "last")
+
+        if pi > 0 and not continues_card:
             result.append(None)
+
         if para.startswith("\u0001CODE\u0001"):
             result.extend(_decode_code_block_lines(para))
             continue
-        if para.startswith("\u0010"):  # walkthrough code line (spoken, real words)
-            from qa_mode.qa_slideshow import _wrap_text_px as _wrap_mono
-            rest = para[1:]
-            lang = ""
-            if "\u0013" in rest:
-                lang, _, rest = rest.partition("\u0013")
+
+        if para.startswith("\u0010") or para.startswith("\u0011"):
+            role = "code" if para.startswith("\u0010") else "comment"
+            body = para[1:]
+            pos, lang, row_text = body.split("\u0014", 2)
             mono_font = _get_mono_font(max(16, int(_line_height(font) * 0.62)))
-            for ln in _wrap_mono(rest, mono_font, max_width):
-                result.append(f"\u0001CW\u0001{lang}\u0001{ln}")
-                lang = ""  # only the first wrapped line carries the lang tag
+            wrapped = _wrap_text_px(row_text, mono_font, max_width) or [""]
+            for j, ln in enumerate(wrapped):
+                # Only the FIRST wrapped sub-line carries the row's real
+                # pos (for header/rounding); extra wrapped sub-lines (rare —
+                # code/comment rows are usually short) are always "mid".
+                sub_pos = pos if j == 0 else "mid"
+                result.append(f"\u0001CW2\u0001{role}\u0001{sub_pos}\u0001{lang}\u0001{ln}")
             continue
-        if para.startswith("\u0011"):  # walkthrough comment (spoken, distinct colour)
-            para = para[1:].strip()
-            result.append("\u0001EXP\u0001")
-            lines = _wrap_text_px(para, font, max_width)
-            result.extend(lines)
-            continue
+
         if para.startswith("(\U0001F4A1)"):  # (💡) final-summary explanation callout
             para = para[len("(\U0001F4A1)"):].strip()
             result.append("\u0001EXP\u0001")
             lines = _wrap_text_px(para, font, max_width)
             result.extend(lines)
             continue
+
         lines = _wrap_text_px(para, font, max_width)
         result.extend(lines)
     return result or [""]
@@ -667,36 +677,70 @@ def _decode_code_block_lines(encoded: str) -> list[str]:
         out.append(f"\u0001CL\u0001{pos}\u0001{lang}\u0001{line_text}")
     return out
 
+def _cw2_parts(item: str) -> tuple[str, str, str, str] | None:
+    """If `item` is a CW2 line, return (role, pos, lang, text); else None."""
+    if not item or not item.startswith("\u0001CW2\u0001"):
+        return None
+    body = item[len("\u0001CW2\u0001"):]
+    parts = body.split("\u0001", 3)
+    if len(parts) < 4:
+        return None
+    return tuple(parts)  # (role, pos, lang, text)
+
+
 def _paginate_paras(para_lines: list, max_lines: int) -> list[list]:
-    """Paginate para_lines (strings + None markers) respecting max_lines."""
+    """Paginate para_lines (strings + None markers) respecting max_lines.
+    CW2 rows are kept together and weighted by their actual visual height."""
     if not para_lines:
         return [[]]
     pages, current, line_count = [], [], 0
     for item in para_lines:
         if item is None or item == "\u0001EXP\u0001":
             current.append(item)
-        else:
-            if line_count >= max_lines:
+            continue
+
+        cw2 = _cw2_parts(item)
+        if cw2:
+            role, pos, lang, text = cw2
+            # 'first'/'only' row has a header bar on top → costs 2 line units
+            cost = 2 if pos in ("first", "only") else 1
+            # Never page-break mid-card — if we're in the middle of a block
+            # (mid/last row), just keep going to avoid orphaned partial cards
+            if pos not in ("mid", "last") and line_count + cost > max_lines:
                 pages.append(current)
                 current, line_count = [], 0
             current.append(item)
-            line_count += 1
+            line_count += cost
+            continue
+
+        if line_count >= max_lines:
+            pages.append(current)
+            current, line_count = [], 0
+        current.append(item)
+        line_count += 1
     if current:
         pages.append(current)
     return pages if pages else [[]]
 
 
 def _count_para_words(para_lines: list) -> int:
-    """Count words across a page of para_lines (skip None markers, code
-    lines, and the EXP callout marker — none of these carry spoken words)."""
+    """Count spoken words across a page of para_lines.
+    Skips: None gaps, EXP marker, silent CL lines.
+    CW2 lines (code + comment rows) carry real spoken words — count them."""
     from qa_mode.qa_slideshow import _text_tokens
-    return sum(
-        1 for item in para_lines
-        if item is not None
-        and item != "\u0001EXP\u0001"
-        and not item.startswith("\u0001CL\u0001")
-        for t in _text_tokens(item) if t.strip()
-    )
+    total = 0
+    for item in para_lines:
+        if item is None or item == "\u0001EXP\u0001":
+            continue
+        if item.startswith("\u0001CL\u0001"):
+            continue  # silent legacy code lines — no spoken words
+        cw2 = _cw2_parts(item)
+        if cw2:
+            _, _, _, text = cw2
+            total += sum(1 for t in _text_tokens(text) if t.strip())
+            continue
+        total += sum(1 for t in _text_tokens(item) if t.strip())
+    return total
 
 
 def _char_weighted_word_idx(progress: float, spoken_words: list) -> int:
@@ -842,43 +886,60 @@ def _draw_code_line(draw, marker: str, x0: int, y: int, video_width: int,
     return y + row_h
 
 
-def _code_walkthrough_row_height(line_h: int, has_lang: bool) -> int:
-    """Total pixel height a walkthrough code-line card will occupy
-    (used to check bottom-margin overflow before actually drawing it)."""
+_COMMENT_PREFIX_BY_LANG = {
+    "python": "#", "py": "#", "bash": "#", "sh": "#", "shell": "#",
+    "yaml": "#", "yml": "#", "ruby": "#", "rb": "#", "r": "#", "perl": "#",
+}
+
+
+def _comment_prefix(lang: str) -> str:
+    return _COMMENT_PREFIX_BY_LANG.get((lang or "").lower(), "//") + " "
+
+
+def _code_row_height(line_h: int, pos: str) -> int:
+    """Pixel height ONE row (code or comment) occupies, including its
+    header if `pos` is 'first'/'only' (used for bottom-margin overflow
+    checks before actually drawing)."""
     mono_size = max(16, int(line_h * 0.62))
     font = _get_mono_font(mono_size)
     from qa_mode.qa_slideshow import _line_height
     fh = _line_height(font)
     row_h = fh + 14
-    return row_h + (row_h if has_lang else 0)
+    return row_h + (row_h if pos in ("first", "only") else 0)
 
 
-def _draw_code_walkthrough_line(draw, lang: str, code_text: str, x0: int, y: int,
-                                 video_width: int, line_h: int,
-                                 word_index: int, active_word: int,
-                                 highlight_color: tuple) -> tuple[int, int]:
+def _draw_code_walkthrough_row(draw, role: str, pos: str, lang: str, row_text: str,
+                                x0: int, y: int, video_width: int, line_h: int,
+                                word_index: int, active_word: int,
+                                highlight_color: tuple) -> tuple[int, int]:
     """
-    Draw ONE spoken/highlighted code line as its own self-contained rounded
-    card (terminal-style header + dots shown only when `lang` is non-empty,
-    i.e. the first line of a block). Each word is drawn individually so the
-    currently-spoken word can be highlighted, same as normal prose.
-    Returns (new_y, new_word_index).
+    Draw ONE row of a continuous VS-Code-style code card. `role` is
+    "code" or "comment"; `pos` is first/mid/last/only — rows sharing a
+    card (mid/last) are drawn flush against the previous row with no
+    gap, so a whole multi-line block reads as ONE block, exactly like
+    an editor, with comments shown the same way an inline `# comment`
+    would look. Each word is drawn individually so the active word can
+    be highlighted in sync with the voice. Returns (new_y, new_word_index).
     """
     from qa_mode.qa_slideshow import _text_width, _line_height, _text_tokens
 
-    card_bg    = (32, 34, 40)
-    header_bg  = (24, 25, 30)
-    text_color = (210, 230, 210)
-    lang_color = (150, 160, 175)
-    pad_x      = 18
-    radius     = 14
-    card_w     = video_width - 2 * x0
+    card_bg      = (32, 34, 40)
+    header_bg    = (24, 25, 30)
+    code_color   = (210, 230, 210)
+    comment_color = (106, 153, 85)   # classic VS Code green comment colour
+    lang_color   = (150, 160, 175)
+    pad_x        = 18
+    radius       = 14
+    card_w       = video_width - 2 * x0
 
     mono_size = max(16, int(line_h * 0.62))
     font = _get_mono_font(mono_size)
     fh   = _line_height(font)
 
-    if lang:
+    top_rounded = pos in ("first", "only")
+    bot_rounded = pos in ("last", "only")
+
+    if top_rounded and lang:
         header_h = fh + 14
         _rounded_rect(draw, [x0, y, x0 + card_w, y + header_h], radius,
                       fill=header_bg, corners=(True, True, False, False))
@@ -891,18 +952,22 @@ def _draw_code_walkthrough_line(draw, lang: str, code_text: str, x0: int, y: int
         draw.text((x0 + card_w - pad_x - lw, dot_y - fh // 2),
                   lang, font=font, fill=lang_color)
         y += header_h
-        top_rounded = False  # header already drew the rounded top
-    else:
-        top_rounded = True
+        top_rounded = False  # header already drew the rounded top corners
 
     row_h = fh + 14
     _rounded_rect(draw, [x0, y, x0 + card_w, y + row_h], radius,
-                  fill=card_bg, corners=(top_rounded, top_rounded, True, True))
+                  fill=card_bg, corners=(top_rounded, top_rounded, bot_rounded, bot_rounded))
 
+    base_color = comment_color if role == "comment" else code_color
     x = x0 + pad_x
-    for token in _text_tokens(code_text):
+    if role == "comment":
+        prefix = _comment_prefix(lang)
+        draw.text((x, y + 7), prefix, font=font, fill=comment_color)
+        x += _text_width(draw, prefix, font)
+
+    for token in _text_tokens(row_text):
         is_word = bool(token.strip())
-        color = highlight_color if (is_word and word_index == active_word) else text_color
+        color = highlight_color if (is_word and word_index == active_word) else base_color
         draw.text((x, y + 7), token, font=font, fill=color)
         x += _text_width(draw, token, font)
         if is_word:
@@ -1060,22 +1125,22 @@ def _render_slide_paragraphs(
             continue
         line = item
 
-        if line.startswith("\u0001CW\u0001"):
-            body = line[len("\u0001CW\u0001"):]
-            lang, _, code_text = body.partition("\u0001")
-            needed_h = _code_walkthrough_row_height(a_lh, bool(lang))
+        if line.startswith("\u0001CW2\u0001"):
+            body = line[len("\u0001CW2\u0001"):]
+            role, pos, lang, row_text = body.split("\u0001", 3)
+            needed_h = _code_row_height(a_lh, pos)
             if y + needed_h > y_max:
-                for token in _text_tokens(code_text):
+                for token in _text_tokens(row_text):
                     if token.strip():
                         word_index += 1
                 continue
-            y, word_index = _draw_code_walkthrough_line(
-                draw, lang, code_text, x0=margin_side, y=y,
+            y, word_index = _draw_code_walkthrough_row(
+                draw, role, pos, lang, row_text, x0=margin_side, y=y,
                 video_width=video_width, line_h=a_lh,
                 word_index=word_index, active_word=active_word,
                 highlight_color=highlight_color,
             )
-            start_of_para = True  # next paragraph (comment/prose) starts fresh
+            start_of_para = True  # next paragraph (prose) starts fresh
             continue
 
         if line.startswith("\u0001CL\u0001"):
@@ -1089,8 +1154,10 @@ def _render_slide_paragraphs(
 
         # Skip this line entirely if it would overflow the bottom margin
         if y + a_lh > y_max:
-            if not line.startswith("\u0001CL\u0001"):
-                for token in _text_tokens(line):
+            cw2 = _cw2_parts(line)
+            count_text = cw2[3] if cw2 else (line if not line.startswith("\u0001CL\u0001") else None)
+            if count_text:
+                for token in _text_tokens(count_text):
                     if token.strip():
                         word_index += 1
             continue
