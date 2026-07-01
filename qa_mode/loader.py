@@ -47,12 +47,8 @@ _FENCE_RE = re.compile(r"```([A-Za-z0-9_+-]*)[ \t]*\n?(.*?)```", re.DOTALL)
 # Captures one or more consecutive "> ..." lines immediately following the
 # closing fence (allowing blank lines/whitespace right after the fence).
 # Used as an optional FINAL summary after a code block (line-by-line or not).
-# Used as an optional FINAL summary after a code block (line-by-line or not).
 _EXPLAIN_RE = re.compile(r"^[ \t]*\n*((?:^[ \t]*>[^\n]*\n?)+)", re.MULTILINE)
 
-# Marker prepended to a final-summary explanation paragraph's display text —
-# wrapped in parens so the EXISTING paren-stripping logic makes it invisible
-# to TTS (the explanation sentence itself, after the marker, is fully spoken).
 # Marker prepended to a final-summary explanation paragraph's display text —
 # wrapped in parens so the EXISTING paren-stripping logic makes it invisible
 # to TTS (the explanation sentence itself, after the marker, is fully spoken).
@@ -68,9 +64,9 @@ _EXPLAIN_MARKER = "(\U0001F4A1)"  # (💡)
 # normal word-reveal/highlight machinery; \u0010/\u0011/\u0013 are control
 # characters glued to the front of a paragraph's first word — they never
 # add an extra "word" to the count, just flag how that paragraph renders.
-_CODE_LINE_MARK = "\u0010"   # paragraph = one spoken/highlighted code line
-_COMMENT_MARK   = "\u0011"   # paragraph = that line's spoken comment
-_LANG_SEP       = "\u0013"   # separates embedded lang tag from the first code word
+_CODE_LINE_MARK = "\u0010"   # paragraph = one spoken/highlighted code row
+_COMMENT_MARK   = "\u0011"   # paragraph = one spoken/highlighted in-card comment row
+_FIELD_SEP      = "\u0014"   # separates pos/lang/text fields glued onto a paragraph
 
 
 def _encode_code_block(lang: str, code: str) -> str:
@@ -86,10 +82,16 @@ def _encode_code_block(lang: str, code: str) -> str:
 def _split_code_lines_for_walkthrough(lang: str, code: str) -> list[tuple[str, tuple]] | None:
     """
     If any line in `code` has a trailing '## comment', parse the whole
-    block into a line-by-line walkthrough: returns a list of
-    ("codeline", (lang_or_None, code_text)) / ("comment", comment_text)
-    parts in speaking order. Returns None if no line uses '##' (caller
-    should fall back to the silent single-card encoding instead).
+    block into a line-by-line walkthrough rendered as ONE continuous
+    VS-Code-style card: code rows in normal text colour, comment rows in
+    a muted comment colour with a '#'/'//' prefix — exactly like reading
+    a commented file top to bottom. Returns a list of
+    ("codeline", (pos, lang, code_text)) / ("comment", (pos, lang, text))
+    parts in speaking order, where `pos` (first/mid/last/only) tells the
+    renderer when to draw the card's rounded top/header and rounded
+    bottom, so consecutive rows stay visually joined into one block.
+    Returns None if no line uses '##' (caller falls back to the silent
+    single-card encoding instead).
     """
     code = textwrap.dedent(code).strip("\n")
     raw_lines = code.split("\n")
@@ -107,13 +109,31 @@ def _split_code_lines_for_walkthrough(lang: str, code: str) -> list[tuple[str, t
     if not has_comment:
         return None
 
-    parts: list[tuple[str, tuple]] = []
-    for i, (code_text, comment_text) in enumerate(parsed):
+    # Flatten into the actual row sequence (code row, then its comment row
+    # if any) so we can compute first/mid/last/only across the WHOLE card.
+    rows: list[tuple[str, str]] = []  # (role, text)
+    for code_text, comment_text in parsed:
         if not code_text.strip():
             continue
-        parts.append(("codeline", (lang if i == 0 else None, code_text)))
+        rows.append(("code", code_text))
         if comment_text:
-            parts.append(("comment", comment_text))
+            rows.append(("comment", comment_text))
+
+    n = len(rows)
+    parts: list[tuple[str, tuple]] = []
+    for i, (role, text) in enumerate(rows):
+        if n == 1:
+            pos = "only"
+        elif i == 0:
+            pos = "first"
+        elif i == n - 1:
+            pos = "last"
+        else:
+            pos = "mid"
+        kind = "codeline" if role == "code" else "comment"
+        # lang is only needed on the very first row (draws the header once);
+        # comments also carry it so the renderer can pick '#' vs '//'.
+        parts.append((kind, (pos, lang, text)))
     return parts
 
 
@@ -133,18 +153,8 @@ def _take_explanation(text_after_fence: str) -> tuple[str, int]:
 
 
 def _split_text_and_code(raw_answer: str) -> list[tuple[str, object]]:
-def _split_text_and_code(raw_answer: str) -> list[tuple[str, object]]:
     """
     Split a raw answer (with its original line breaks still intact) into
-    an ordered list of parts, each a (kind, content) tuple:
-      ("text", str)            — plain prose, gets paren-stripping etc.
-      ("code", encoded_blob)   — a SILENT code block (no '##' lines) shown
-                                  as one opaque card, never spoken.
-      ("codeline", (lang, txt))— ONE line of a line-by-line walkthrough,
-                                  spoken + highlighted like normal text.
-      ("comment", str)         — that line's spoken inline comment.
-      ("explain", str)         — optional final '> ...' summary after the
-                                  whole block, spoken + shown as a callout.
     an ordered list of parts, each a (kind, content) tuple:
       ("text", str)            — plain prose, gets paren-stripping etc.
       ("code", encoded_blob)   — a SILENT code block (no '##' lines) shown
@@ -157,18 +167,11 @@ def _split_text_and_code(raw_answer: str) -> list[tuple[str, object]]:
     Must run BEFORE any whitespace collapsing, or multi-line code is lost.
     """
     parts: list[tuple[str, object]] = []
-    parts: list[tuple[str, object]] = []
     pos = 0
     for m in _FENCE_RE.finditer(raw_answer):
         if m.start() > pos:
             parts.append(("text", raw_answer[pos:m.start()]))
         lang, code = m.group(1), m.group(2)
-
-        walkthrough_parts = _split_code_lines_for_walkthrough(lang, code)
-        if walkthrough_parts is not None:
-            parts.extend(walkthrough_parts)
-        else:
-            parts.append(("code", _encode_code_block(lang, code)))
 
         walkthrough_parts = _split_code_lines_for_walkthrough(lang, code)
         if walkthrough_parts is not None:
@@ -341,19 +344,21 @@ def load_qa_file(path: str, cfg) -> list[dict]:
             if kind == "code":
                 display_chunks.append(content)   # opaque sentinel token, kept as-is
             elif kind == "codeline":
-                lang, code_text = content
+                pos, lang, code_text = content
                 code_text = code_text.strip()
                 if not code_text:
                     continue
                 spoken_chunks.append(code_text)  # speak the command like normal text
-                prefix = _CODE_LINE_MARK + (lang + _LANG_SEP if lang else "")
+                prefix = _CODE_LINE_MARK + pos + _FIELD_SEP + (lang or "") + _FIELD_SEP
                 display_chunks.append(prefix + code_text)
             elif kind == "comment":
-                collapsed = " ".join(content.split())
+                pos, lang, content_text = content
+                collapsed = " ".join(content_text.split())
                 if not collapsed:
                     continue
                 spoken_chunks.append(collapsed)  # spoken right after its code line
-                display_chunks.append(_COMMENT_MARK + collapsed)
+                prefix = _COMMENT_MARK + pos + _FIELD_SEP + (lang or "") + _FIELD_SEP
+                display_chunks.append(prefix + collapsed)
             elif kind == "explain":
                 collapsed = " ".join(content.split())
                 if not collapsed:
