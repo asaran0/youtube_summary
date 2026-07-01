@@ -19,6 +19,7 @@ import numpy as np
 from utils import get_logger
 from core.tts.base import TTSStrategy
 from core.lang.transliterate import clean_text
+from core.tts.audio_utils import smooth_concatenate
 
 log = get_logger("tts.kokoro")
 
@@ -140,7 +141,7 @@ class KokoroStrategy(TTSStrategy):
                     results.append(_silent_segment(text, sample_rate))
                     continue
 
-                waveform = np.concatenate(chunks)
+                waveform = smooth_concatenate(chunks, sample_rate)
                 samples  = _float_to_int16(waveform)
                 dur      = len(samples) / sample_rate
                 results.append({

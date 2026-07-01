@@ -218,10 +218,34 @@ def _build_audio_and_timeline(
     # compression, loudness normalization) — applying this once at the
     # end gives more consistent loudness than polishing each spoken
     # segment separately before silence is even in the picture.
-    from core.tts.audio_utils import resample_wav, polish_audio
+    from core.tts.audio_utils import resample_wav, polish_audio, add_background_music
     resampled_path = output_path.replace(".wav", "_resampled.wav")
     resample_wav(raw_path, resampled_path, target_rate=44100)
     polish_audio(resampled_path, output_path, cfg)
+
+    # Optional background music bed, with sidechain ducking so it never
+    # competes with speech. Entirely opt-in via config — off unless a
+    # mode sets BACKGROUND_MUSIC_ENABLED = True and a valid
+    # BACKGROUND_MUSIC_PATH. Lives here (not per-mode code) so any mode
+    # gets it identically just by setting the two config flags.
+    if getattr(cfg, "BACKGROUND_MUSIC_ENABLED", False):
+        music_path = getattr(cfg, "BACKGROUND_MUSIC_PATH", "")
+        if music_path and os.path.exists(music_path):
+            mixed_path = output_path.replace(".wav", "_mixed.wav")
+            try:
+                add_background_music(
+                    output_path,
+                    music_path,
+                    mixed_path,
+                    music_volume_db=getattr(cfg, "BACKGROUND_MUSIC_VOLUME_DB", -22.0),
+                    duck_ratio=getattr(cfg, "BACKGROUND_MUSIC_DUCK_RATIO", 20.0),
+                )
+                os.replace(mixed_path, output_path)
+                log.info("Background music mixed in → %s", music_path)
+            except Exception as exc:
+                log.warning("Background music mix failed (%s) — continuing with voice-only audio.", exc)
+        else:
+            log.warning("BACKGROUND_MUSIC_ENABLED is True but BACKGROUND_MUSIC_PATH is missing/invalid: %r", music_path)
 
     for tmp in (raw_path, resampled_path):
         if os.path.exists(tmp):

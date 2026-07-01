@@ -65,8 +65,20 @@ MACOS_TTS_RATE = 125
 
 # Gap between question being spoken and answer starting: 1 second
 TTS_PAUSE_BETWEEN_SEGMENTS = 0.3
+TTS_PAUSE_VARY_BY_PUNCTUATION = True  # shorter gap after '.', longer after '...'/'?'/'!' — less mechanical pacing
 TTS_PAUSE_BETWEEN_PHRASES  = 0.20
 TTS_ANSWER_PAUSE_EXTRA     = 0.0   # no pause before answer begins
+
+# ── Background music bed (optional) ───────────────────────────────────────
+# Off by default. Set BACKGROUND_MUSIC_ENABLED = True and point
+# BACKGROUND_MUSIC_PATH at an actual music file (mp3/wav — looped/trimmed
+# automatically to match narration length) to enable. Music auto-ducks
+# under speech (see core/tts/audio_utils.add_background_music) so it never
+# fights the voice.
+BACKGROUND_MUSIC_ENABLED = True
+BACKGROUND_MUSIC_PATH = "background/cinematic.mp3"
+BACKGROUND_MUSIC_VOLUME_DB = -1.0   # base bed level — raise toward -16 for more presence, lower toward -28 for subtler
+BACKGROUND_MUSIC_DUCK_RATIO = 20.0   # how hard music drops under speech — lower toward 6-10 for a gentler duck
 
 AUDIO_POST_PROCESSING = True
 AUDIO_FILTER = (
