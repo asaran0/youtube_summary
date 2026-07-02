@@ -28,6 +28,13 @@ Key behaviours:
 import re
 import textwrap
 
+# ── CODE_SPEAK_MODE — read from config with a safe fallback ──────────────────
+try:
+    from qa_mode import config as _qa_cfg
+    _CODE_SPEAK_MODE: bool = bool(getattr(_qa_cfg, "CODE_SPEAK_MODE", True))
+except Exception:
+    _CODE_SPEAK_MODE = True  # safe default: speak all code
+
 # Sentinel used to encode a code block as a single opaque "word" inside
 # display_text, so the word-by-word reveal machinery (which operates on
 # whitespace-split tokens) treats the whole block as one unit instead of
@@ -137,6 +144,35 @@ def _split_code_lines_for_walkthrough(lang: str, code: str) -> list[tuple[str, t
     return parts
 
 
+def _force_walkthrough_all_lines(lang: str, code: str) -> list[tuple[str, tuple]]:
+    """
+    Force every code line into spoken walkthrough mode even when no '##'
+    comment is present.  Called when CODE_SPEAK_MODE = True.
+
+    Returns the same (kind, content) list that _split_code_lines_for_walkthrough
+    returns, with every non-blank line as a "codeline" entry (no comment rows).
+    Each line is spoken and highlighted word-by-word exactly like normal prose.
+    """
+    code = textwrap.dedent(code).strip("\n")
+    raw_lines = code.split("\n")
+    rows = [("code", ln.rstrip()) for ln in raw_lines if ln.strip()]
+    n = len(rows)
+    if n == 0:
+        return []
+    parts: list[tuple[str, tuple]] = []
+    for i, (role, text) in enumerate(rows):
+        if n == 1:
+            pos = "only"
+        elif i == 0:
+            pos = "first"
+        elif i == n - 1:
+            pos = "last"
+        else:
+            pos = "mid"
+        parts.append(("codeline", (pos, lang, text)))
+    return parts
+
+
 def _take_explanation(text_after_fence: str) -> tuple[str, int]:
     """
     If `text_after_fence` starts with one or more '> ...' blockquote lines
@@ -158,13 +194,18 @@ def _split_text_and_code(raw_answer: str) -> list[tuple[str, object]]:
     an ordered list of parts, each a (kind, content) tuple:
       ("text", str)            — plain prose, gets paren-stripping etc.
       ("code", encoded_blob)   — a SILENT code block (no '##' lines) shown
-                                  as one opaque card, never spoken.
-      ("codeline", (lang, txt))— ONE line of a line-by-line walkthrough,
-                                  spoken + highlighted like normal text.
-      ("comment", str)         — that line's spoken inline comment.
+                                  line-by-line as a card, never spoken.
+                                  Only used when CODE_SPEAK_MODE = False.
+      ("codeline", (pos,lang,txt)) — ONE spoken+highlighted code row.
+      ("comment", (pos,lang,txt)) — that line's spoken inline comment.
       ("explain", str)         — optional final '> ...' summary after the
                                   whole block, spoken + shown as a callout.
     Must run BEFORE any whitespace collapsing, or multi-line code is lost.
+
+    CODE_SPEAK_MODE behaviour:
+      True  → all code blocks, even without '##', are turned into spoken
+               walkthrough rows (every line read aloud + word-highlighted).
+      False → only '##'-annotated blocks are spoken; others stay silent cards.
     """
     parts: list[tuple[str, object]] = []
     pos = 0
@@ -174,9 +215,15 @@ def _split_text_and_code(raw_answer: str) -> list[tuple[str, object]]:
         lang, code = m.group(1), m.group(2)
 
         walkthrough_parts = _split_code_lines_for_walkthrough(lang, code)
+        if walkthrough_parts is None and _CODE_SPEAK_MODE:
+            # No '##' present but CODE_SPEAK_MODE=True → force every line
+            # into the spoken walkthrough, read aloud word-by-word.
+            walkthrough_parts = _force_walkthrough_all_lines(lang, code)
+
         if walkthrough_parts is not None:
             parts.extend(walkthrough_parts)
         else:
+            # CODE_SPEAK_MODE=False and no ## → silent line-by-line card.
             parts.append(("code", _encode_code_block(lang, code)))
         pos = m.end()
 

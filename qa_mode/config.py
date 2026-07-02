@@ -5,6 +5,19 @@ qa_mode/config.py — Settings specific to Q&A / interview-prep mode.
 MODE_NAME = "qa"
 
 # ─────────────────────────────────────────────────────────────
+#  CODE SPEAKING MODE
+# ─────────────────────────────────────────────────────────────
+# When True  → ALL code lines are spoken aloud AND highlighted word-by-word,
+#              even if no '##' comment is present (every line is narrated).
+# When False → Code is NEVER spoken (silent card), but is still displayed
+#              line-by-line in the VS-Code style card.
+#
+# TIP: Use True for Java/Python interview Q&A where you want every line read.
+#      Use False for quick bash snippets where prose context is enough.
+# CODE_SPEAK_MODE = True
+CODE_SPEAK_MODE = True
+
+# ─────────────────────────────────────────────────────────────
 #  LANGUAGE
 # ─────────────────────────────────────────────────────────────
 LANGUAGE = "en"
@@ -12,7 +25,7 @@ LANGUAGE = "en"
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
 # ─────────────────────────────────────────────────────────────
-OUTPUT_MODE = "reel"
+OUTPUT_MODE = "full"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -77,7 +90,7 @@ TTS_ANSWER_PAUSE_EXTRA     = 0.0   # no pause before answer begins
 # fights the voice.
 BACKGROUND_MUSIC_ENABLED = True
 BACKGROUND_MUSIC_PATH = "background/cinematic.mp3"
-BACKGROUND_MUSIC_VOLUME_DB = 5.0   # base bed level — raise toward -16 for more presence, lower toward -28 for subtler
+BACKGROUND_MUSIC_VOLUME_DB = 2.0   # base bed level — raise toward -16 for more presence, lower toward -28 for subtler
 BACKGROUND_MUSIC_DUCK_RATIO = 20.0   # how hard music drops under speech — lower toward 6-10 for a gentler duck
 
 AUDIO_POST_PROCESSING = True

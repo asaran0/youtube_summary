@@ -16,20 +16,20 @@ and its own metadata file listing exactly which questions are in that part.
 
 # Path to the questions file (relative to this file, or absolute).
 # Files live in the  questions/  folder by default.
-QUESTIONS_FILE = "questions/artifical intelligence.txt"
+QUESTIONS_FILE = "questions/microservice_qa.txt"
 
 # How many Q&A pairs to include in each part video.
-QUESTIONS_PER_PART = 20
+QUESTIONS_PER_PART = 1
 
 # Base name used for output filenames and video titles.
 # e.g.  "java_basics"  →  java_basics_part1_qa.mp4, java_basics_part2_qa.mp4
-BATCH_TITLE = "Artificial Intelligence Basic interview QA"
+BATCH_TITLE = "Microservice architecture fundamentals interview QA"
 
 # ── Output ───────────────────────────────────────────────────────────────────
 
 # Where finished videos and metadata are written.
 # Overrides qa_mode/config.py OUTPUT_DIR for this batch run.
-OUTPUT_DIR = "output/qa/ai"
+OUTPUT_DIR = "output/qa/micro"
 
 # ── Optional overrides (set to None to use qa_mode/config.py defaults) ───────
 
@@ -37,7 +37,7 @@ OUTPUT_DIR = "output/qa/ai"
 LANGUAGE = "en"
 
 # "reel" (1080×1920 vertical) | "full" (1920×1080 landscape) — None = default
-OUTPUT_MODE = "full"
+OUTPUT_MODE = "reel"
 
 # "macos" | "xtts" | "mms" — None = use config default
 TTS_BACKEND = "kokoro"

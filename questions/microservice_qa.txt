@@ -1,0 +1,332 @@
+# Phase 1: Microservices Fundamentals Interview Questions and Answers
+
+## Topic 1: What are Microservices?
+
+Q1: What are Microservices? (Asked in TCS, Infosys, Capgemini, Cognizant, Wipro, Accenture, EPAM)
+
+A:
+Microservices are an architectural style where an application is divided into multiple small, independent services. Each service focuses on a specific business capability and can be developed, deployed, and scaled independently.
+
+For example, in an e-commerce application, we can have separate services for:
+
+* User Service
+* Product Service
+* Order Service
+* Payment Service
+* Notification Service
+
+Each service has its own codebase, database, and deployment process. These services communicate with each other using APIs such as REST or messaging systems like Kafka.
+
+In simple words, instead of building one large application, we build several small applications that work together.
+
+---
+
+Q2: Why are microservices called loosely coupled services? (Asked in TCS, HCL, Infosys, EPAM)
+
+A:
+Microservices are called loosely coupled because each service works independently and has minimal dependency on other services.
+
+For example:
+
+Order Service needs customer information.
+
+Instead of directly accessing the Customer Service database, it calls the Customer Service API.
+
+If Customer Service changes its database design, Order Service usually does not need modification as long as the API remains the same.
+
+Loose coupling provides:
+
+* Easier maintenance
+* Independent deployment
+* Better scalability
+* Reduced impact of changes
+
+This is one of the biggest advantages of microservices.
+
+---
+
+Q3: What is a business capability in microservices? (Asked in Accenture, Capgemini, Cognizant)
+
+A:
+A business capability is a specific business function that provides a particular feature to users.
+
+Examples:
+
+* User Registration
+* Product Management
+* Order Processing
+* Payment Handling
+* Inventory Management
+
+Each microservice should ideally represent one business capability.
+
+For example:
+
+Payment Service should only manage:
+
+* Payment creation
+* Payment status
+* Refund processing
+
+It should not contain product management or inventory logic.
+
+This principle keeps services focused and easy to maintain.
+
+---
+
+Q4: How do microservices communicate with each other? (Asked in TCS, Infosys, EPAM, IBM)
+
+A:
+Microservices communicate using APIs and messaging systems.
+
+There are mainly two ways:
+
+1. Synchronous Communication
+   Examples:
+
+* REST API
+* gRPC
+
+Example:
+Order Service calls Payment Service and waits for a response.
+
+2. Asynchronous Communication
+   Examples:
+
+* Kafka
+* RabbitMQ
+
+Example:
+Order Service publishes an event saying:
+
+"Order Created"
+
+Inventory Service and Notification Service receive the event and perform their work independently.
+
+Asynchronous communication provides better scalability and lower coupling.
+
+---
+
+Q5: Can microservices use different technologies? (Asked in Wipro, Accenture, Cognizant)
+
+A:
+Yes.
+
+One of the advantages of microservices is technology diversity.
+
+For example:
+
+* User Service may use Java and Spring Boot.
+* Recommendation Service may use Python.
+* Notification Service may use Node.js.
+
+All services can still communicate through APIs.
+
+This allows teams to choose the best technology for their business requirements.
+
+However, companies should avoid unnecessary technology diversity because maintaining too many technologies increases operational complexity.
+
+---
+
+Q6: What are the main principles of microservices architecture? (Asked in EPAM, Capgemini, Infosys)
+
+A:
+The main principles are:
+
+* Single Responsibility
+* Independent Deployment
+* Loose Coupling
+* High Cohesion
+* Decentralized Data Management
+* Fault Isolation
+* Independent Scaling
+* Automation and Continuous Delivery
+
+Example:
+
+During a festive sale:
+
+* Product Service may receive heavy traffic.
+* Payment Service traffic may remain normal.
+
+Only Product Service can be scaled instead of scaling the entire application.
+
+This makes the system more efficient and cost-effective.
+
+---
+
+## Topic 2: Monolithic vs Microservices Architecture
+
+Q7: What is a Monolithic Architecture? (Asked in TCS, Infosys, HCL, Capgemini)
+
+A:
+Monolithic architecture is a software architecture where the entire application is developed and deployed as a single unit.
+
+For example, an e-commerce application may contain:
+
+* User Module
+* Product Module
+* Order Module
+* Payment Module
+
+All modules exist inside one application and share the same database.
+
+A small change in one module generally requires redeploying the entire application.
+
+Monolithic architecture is simple initially but becomes difficult to manage as the application grows.
+
+---
+
+Q8: What is the difference between Monolithic and Microservices Architecture? (Asked in TCS, Infosys, EPAM, Accenture)
+
+A:
+
+Monolithic Architecture:
+
+* Single application
+* Single deployment
+* Usually one database
+* Entire application scales together
+* Technology stack is usually fixed
+* Failure can impact the entire system
+
+Microservices Architecture:
+
+* Multiple independent services
+* Independent deployment
+* Database per service
+* Services can scale individually
+* Different technologies can be used
+* Better fault isolation
+
+Example:
+
+Suppose Product Search receives heavy traffic.
+
+In Monolithic Architecture:
+Entire application must be scaled.
+
+In Microservices Architecture:
+Only Product Service needs additional instances.
+
+This reduces infrastructure cost significantly.
+
+---
+
+Q9: Why do companies move from monolith to microservices? (Asked in Amazon, Microsoft, TCS, EPAM, Infosys)
+
+A:
+Companies usually move to microservices because monolithic applications become difficult to manage as they grow.
+
+Problems with large monoliths:
+
+* Slow deployments
+* Large codebase
+* Difficult maintenance
+* Poor scalability
+* Team dependencies
+* Higher risk during releases
+
+Example:
+
+A change in Payment Module may require redeploying the entire application, including User and Product modules.
+
+In microservices:
+Only Payment Service is deployed.
+
+This allows:
+
+* Faster releases
+* Better scalability
+* Independent teams
+* Improved reliability
+
+However, companies should move to microservices only when business complexity justifies it.
+
+---
+
+Q10: When should you not use microservices? (Asked in EPAM, Accenture, IBM, Capgemini)
+
+A:
+Microservices should not be used when:
+
+* The application is small.
+* Team size is small.
+* Requirements are simple.
+* Traffic is low.
+* Deployment frequency is low.
+* Team lacks distributed system experience.
+
+Example:
+
+A simple employee leave management system with only a few modules may not need microservices.
+
+Using microservices in such cases can create unnecessary complexity:
+
+* Multiple deployments
+* API management
+* Monitoring
+* Service communication
+* Distributed debugging
+
+Sometimes a well-designed monolithic application is a better solution.
+
+This answer is appreciated by interviewers because it shows that microservices are not always the correct choice.
+
+---
+
+Q11: What problems do microservices solve? (Asked in TCS, Infosys, Wipro, Cognizant)
+
+A:
+Microservices solve several problems found in large monolithic applications.
+
+Problems solved:
+
+* Independent deployment
+* Better scalability
+* Faster development
+* Team autonomy
+* Fault isolation
+* Easier maintenance
+* Technology flexibility
+
+Example:
+
+Suppose Notification Service has a bug.
+
+In monolithic architecture:
+Entire application may need redeployment.
+
+In microservices:
+Only Notification Service is fixed and deployed.
+
+This reduces downtime and risk.
+
+---
+
+Q12: Are microservices always better than monolithic architecture? (Asked in Amazon, EPAM, IBM)
+
+A:
+No.
+
+Microservices are not always better.
+
+Monolithic architecture is often better when:
+
+* Product is in early stages
+* Team is small
+* Requirements are simple
+* Traffic is low
+* Faster initial development is needed
+
+Microservices are beneficial when:
+
+* Application becomes large
+* Teams become bigger
+* Deployment frequency increases
+* Scalability requirements become high
+* Business domains become complex
+
+The right architecture depends on business requirements and not on industry trends.
+
+Interviewers generally like this answer because it demonstrates practical architectural thinking rather than blindly preferring microservices.
