@@ -535,6 +535,12 @@ def compile_story_video(
     bg_blur  = int(getattr(cfg,   "STORY_BG_BLUR", 18))
     bg_dim   = float(getattr(cfg, "STORY_BG_DIM",  0.45))
 
+    # When the background is a real photo or video, palette accent colours
+    # (bright yellow, cyan, red) designed for dark gradients look jarring
+    # on actual imagery. For image/video mode we lock to the config-defined
+    # colours only — no per-sentence colour cycling from PALETTES.
+    use_palette_accents = (bg_mode == "gradient")
+
     # Resolve asset lists (handles single/multi/auto-scan)
     bg_image_assets = _resolve_bg_assets(cfg, "image")
     bg_video_assets = _resolve_bg_assets(cfg, "video")
@@ -571,6 +577,10 @@ def compile_story_video(
             continue
 
         palette = PALETTES[idx % len(PALETTES)]
+        # In gradient mode each sentence gets its own vivid accent from PALETTES.
+        # In image/video mode we use the single config-defined highlight colour
+        # so no colour tint is imposed on top of the actual photo/video.
+        chunk_accent = palette[2] if use_palette_accents else hi_color
         # Background per chunk:
         #   gradient  → animated gradient (unique per sentence)
         #   image ×1  → shared static photo loaded once
@@ -608,7 +618,7 @@ def compile_story_video(
             "bg":         bg,
             "words":      words,
             "n_words":    len(words),
-            "accent":     palette[2],
+            "accent":     chunk_accent,
             "wrap_cache": wrap_cache,
         })
 
