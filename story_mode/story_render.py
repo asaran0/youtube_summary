@@ -63,24 +63,9 @@ def _detect_script(text: str) -> str:
 
 
 def _load_font(size: int, lang: str, hint: str = None) -> ImageFont.FreeTypeFont:
-    candidates = []
-    if hint and os.path.exists(hint):
-        candidates.append(hint)
-    if lang == "en":
-        candidates.extend(_LATIN_CANDIDATES)
-        candidates.extend(_DEVANAGARI_CANDIDATES)
-    else:
-        candidates.extend(_DEVANAGARI_CANDIDATES)
-        candidates.extend(_LATIN_CANDIDATES)
-    for path in candidates:
-        if not path or not os.path.exists(path):
-            continue
-        try:
-            return ImageFont.truetype(path, size=size)
-        except Exception:
-            continue
-    log.warning("No font found for size=%d lang=%s, using default", size, lang)
-    return ImageFont.load_default()
+    """Thin wrapper — delegates to core.fonts which uses RAQM shaping."""
+    from core.fonts import get_font
+    return get_font(size, lang=lang, path_hint=hint or "")
 
 
 # ── Colour palettes ───────────────────────────────────────────────────────────
@@ -106,8 +91,8 @@ def _gradient_bg(w: int, h: int, top: tuple, bot: tuple) -> Image.Image:
 # ── Background asset helpers ──────────────────────────────────────────────────
 
 def _prepare_image_bg(path: str, video_w: int, video_h: int,
-                       blur_radius: int = 18, dim: float = 0.45) -> "Image.Image":
-    """Load + resize (cover) + blur + dim a single image for use as bg."""
+                       blur_radius: int = 0, dim: float = 1.0) -> "Image.Image":
+    """Load + resize (cover) an image for use as background. No blur or dim by default."""
     from PIL import ImageFilter
     img    = Image.open(path).convert("RGB")
     iw, ih = img.size
@@ -183,12 +168,12 @@ def _make_video_playlist(
         scaled = []
         for i, vp in enumerate(video_paths):
             out_v = os.path.join(tmpdir, f"v{i:03d}.mp4")
-            eq_br = dim - 1.0
+            # No brightness adjustment — use video exactly as provided
             r = subprocess.run([
                 "ffmpeg", "-y", "-i", vp,
                 "-vf", (
                     f"scale={video_w}:{video_h}:force_original_aspect_ratio=increase,"
-                    f"crop={video_w}:{video_h},eq=brightness={eq_br:.2f}"
+                    f"crop={video_w}:{video_h}"
                 ),
                 "-c:v", codec, "-preset", "fast", "-crf", "22", "-an", out_v,
             ], capture_output=True, text=True)
@@ -423,31 +408,39 @@ def _draw_badge(img: Image.Image, text: str, font_path: str, cfg, accent: tuple)
 # ── Sentence frame renderer ───────────────────────────────────────────────────
 
 def _render_sentence_frame(
-    bg: Image.Image,
-    lines: list[str],
+    bg,
+    lines: list,
     font,
-    active_word: int,          # index of currently-spoken word (-1 = none)
+    active_word: int,
     text_color: tuple,
     highlight_color: tuple,
     stroke_color: tuple,
     stroke_w: int,
     center_y: int,
-    fade_alpha: float = 1.0,   # 0.0 = invisible, 1.0 = fully opaque
-    pop_progress: float = 1.0,  # 0.0 = word just appeared, 1.0 = settled
-) -> Image.Image:
+    fade_alpha: float = 1.0,
+    pop_progress: float = 1.0,
+    font_size: int = 0,
+) -> "Image.Image":
     """
-    Render one sentence frame. Words are revealed progressively as they're
-    spoken; the currently-active word pops in with a small upward bounce
-    and a brightness flash that settles to the normal highlight colour.
+    Render one sentence frame with per-word font switching:
+      Devanagari words -> FreeSansBold  (RAQM shaped, no boxes)
+      Latin/English words -> Poppins-Bold (sharp, modern)
+    Active word pops in with upward bounce + brightness flash.
     """
+    from core.fonts import render_mixed_line, measure_mixed_line, line_height_for_size
+    if font_size <= 0:
+        try:    font_size = font.size
+        except: font_size = 72
+
     img  = bg.copy()
     draw = ImageDraw.Draw(img)
-    lh   = _line_h(font) + 14
-    total_h = len(lines) * lh
-    y = center_y - total_h // 2
+    lh       = line_height_for_size(font_size)
+    total_h  = len(lines) * lh
+    y        = center_y - total_h // 2
 
     pop_progress = max(0.0, min(1.0, pop_progress))
-    pop_ease = _ease_out(pop_progress)
+    pop_ease     = _ease_out(pop_progress)
+    pop_scale    = 1.0 + 0.06 * (1.0 - pop_ease)
 
     word_cursor = 0
     for line in lines:
@@ -456,45 +449,45 @@ def _render_sentence_frame(
             y += lh
             continue
 
-        # Measure full line for centering
-        line_w = _text_w(draw, line, font)
-        x = (img.width - line_w) // 2
+        line_w  = measure_mixed_line(line, font_size)
+        x_start = (img.width - line_w) // 2
 
-        for word in words:
-            is_active = (active_word >= 0 and word_cursor == active_word)
-            col = highlight_color if is_active else text_color
+        line_active = -1
+        if active_word >= 0 and word_cursor <= active_word < word_cursor + len(words):
+            line_active = active_word - word_cursor
 
-            word_y = y
-            if is_active:
-                # Brightness flash: start near-white, settle to highlight colour
-                flash_col = tuple(min(255, int(highlight_color[i] * 0.5 + 255 * 0.5)) for i in range(3))
-                col = tuple(int(flash_col[i] * (1.0 - pop_ease) + highlight_color[i] * pop_ease)
-                            for i in range(3))
-                # Upward bounce that settles into place
-                word_y = y - int(6 * (1.0 - pop_ease))
+        if fade_alpha < 1.0:
+            sx   = min(x_start + line_w // 2, bg.width - 1)
+            sy   = min(y + lh // 2, bg.height - 1)
+            bg_px = bg.getpixel((sx, sy))
+            def _blend(col):
+                return tuple(int(col[i] * fade_alpha + bg_px[i] * (1.0 - fade_alpha)) for i in range(3))
+            t_col = _blend(text_color)
+            h_col = _blend(highlight_color)
+            s_col = _blend(stroke_color)
+        else:
+            t_col, h_col, s_col = text_color, highlight_color, stroke_color
 
-            # Apply fade by blending toward the background colour
-            if fade_alpha < 1.0:
-                bg_sample = bg.getpixel((min(x, bg.width - 1),
-                                          min(y + lh // 2, bg.height - 1)))
-                col = tuple(int(col[i] * fade_alpha + bg_sample[i] * (1.0 - fade_alpha))
-                            for i in range(3))
-                sc  = tuple(int(stroke_color[i] * fade_alpha + bg_sample[i] * (1.0 - fade_alpha))
-                            for i in range(3))
-            else:
-                sc = stroke_color
+        if line_active >= 0:
+            flash = tuple(min(255, int(h_col[i]*0.5 + 255*0.5)) for i in range(3))
+            h_col = tuple(int(flash[i]*(1-pop_ease) + h_col[i]*pop_ease) for i in range(3))
 
-            ww = _text_w(draw, word, font)
-            draw.text((x, word_y), word, font=font, fill=col,
-                       stroke_width=stroke_w, stroke_fill=sc)
-            x += ww + _text_w(draw, " ", font)
-            word_cursor += 1
+        render_y = y - int(6*(1.0-pop_ease)) if line_active >= 0 else y
+
+        render_mixed_line(
+            draw, x_start, render_y, line, font_size,
+            text_color=t_col,
+            highlight_color=h_col,
+            active_word_idx=line_active,
+            stroke_width=stroke_w,
+            stroke_fill=s_col,
+            pop_scale=pop_scale if line_active >= 0 else 1.0,
+        )
+
+        word_cursor += len(words)
         y += lh
 
     return img
-
-
-# ── Main compile function ─────────────────────────────────────────────────────
 
 def compile_story_video(
     selected_chunks: list[dict],
@@ -532,8 +525,11 @@ def compile_story_video(
 
     # ── Detect background mode ───────────────────────────────────────────────
     bg_mode  = getattr(cfg, "STORY_BG_MODE", "gradient").lower()
-    bg_blur  = int(getattr(cfg,   "STORY_BG_BLUR", 18))
-    bg_dim   = float(getattr(cfg, "STORY_BG_DIM",  0.45))
+    # Default: no blur, no dim — use image/video exactly as provided.
+    # Users can set STORY_BG_BLUR and STORY_BG_DIM in their mode config
+    # if they want the background darkened for text readability.
+    bg_blur  = int(getattr(cfg,   "STORY_BG_BLUR", 0))
+    bg_dim   = float(getattr(cfg, "STORY_BG_DIM",  1.0))
 
     # When the background is a real photo or video, palette accent colours
     # (bright yellow, cyan, red) designed for dark gradients look jarring
@@ -598,14 +594,14 @@ def compile_story_video(
             bg = _gradient_bg(video_width, video_height, palette[0], palette[1])
         words   = text.split()
 
-        # Incremental wrap cache: wrap_cache[n] = wrapped lines using only
-        # the first n words. O(n) total (one _wrap call per word count),
-        # safe because each chunk is now exactly one sentence.
+        # Incremental wrap cache using mixed-font measurement so that
+        # English words measured at Poppins width wrap correctly.
+        from core.fonts import measure_mixed_line
         wrap_cache = {0: [""]}
         cur_lines, cur_line = [], ""
         for n, w in enumerate(words, start=1):
             trial = (cur_line + " " + w).strip()
-            if cur_line and _text_w(dummy_draw, trial, font) > max_text_w:
+            if cur_line and measure_mixed_line(trial, sub_size) > max_text_w:
                 cur_lines.append(cur_line)
                 cur_line = w
             else:
@@ -620,6 +616,7 @@ def compile_story_video(
             "n_words":    len(words),
             "accent":     chunk_accent,
             "wrap_cache": wrap_cache,
+            "font_size":  sub_size,
         })
 
     if not chunks:
@@ -691,6 +688,7 @@ def compile_story_video(
             chunk["bg"], lines, font, active_w,
             text_color, chunk["accent"], stroke_col, stroke_w,
             center_y, fade_alpha=alpha, pop_progress=pop_progress,
+            font_size=chunk.get("font_size", sub_size),
         )
 
         # Channel badge

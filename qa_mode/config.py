@@ -5,19 +5,6 @@ qa_mode/config.py — Settings specific to Q&A / interview-prep mode.
 MODE_NAME = "qa"
 
 # ─────────────────────────────────────────────────────────────
-#  CODE SPEAKING MODE
-# ─────────────────────────────────────────────────────────────
-# When True  → ALL code lines are spoken aloud AND highlighted word-by-word,
-#              even if no '##' comment is present (every line is narrated).
-# When False → Code is NEVER spoken (silent card), but is still displayed
-#              line-by-line in the VS-Code style card.
-#
-# TIP: Use True for Java/Python interview Q&A where you want every line read.
-#      Use False for quick bash snippets where prose context is enough.
-# CODE_SPEAK_MODE = True
-CODE_SPEAK_MODE = True
-
-# ─────────────────────────────────────────────────────────────
 #  LANGUAGE
 # ─────────────────────────────────────────────────────────────
 LANGUAGE = "en"
@@ -25,7 +12,7 @@ LANGUAGE = "en"
 # ─────────────────────────────────────────────────────────────
 #  OUTPUT MODE — reel (short, vertical) or full (long, landscape)
 # ─────────────────────────────────────────────────────────────
-OUTPUT_MODE = "full"
+OUTPUT_MODE = "reel"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -38,49 +25,80 @@ OUTPUT_FPS     = 30
 # ─────────────────────────────────────────────────────────────
 TTS_BACKEND = "kokoro"
 
-# ── Kokoro TTS settings ───────────────────────────────────────────────────────
-KOKORO_SPEED = 0.92   # slightly slower than natural — clearer for Q&A
+# ── Kokoro TTS — voice selection ────────────────────────────────────────────
+#
+# "hig" (Romanized Hinglish) uses English voices (af_heart / am_adam).
+# Reason: input is Roman script ("hai", "bahut", "lekin" …).
+# Kokoro English engine (lang_code "a") reads Roman script correctly.
+# Kokoro Hindi engine  (lang_code "h") expects Devanagari — broken on Roman.
+#
+# Available voices:
+#   English female:  af_heart★  af_bella  af_nicole  af_sarah  af_sky
+#   English male:    am_adam★   am_michael am_onyx   am_eric   am_fenrir
+#   Hindi female:    hf_alpha★  hf_beta          (Devanagari input only)
+#   Hindi male:      hm_omega★  hm_psi           (Devanagari input only)
 KOKORO_VOICES = {
-    "en":  "af_heart",
-    "hi":  "hf_alpha",
-    "hig": "hf_alpha",
+    "en":  "af_heart",   # English TTS — warm female
+    "hi":  "hf_alpha",   # Hindi TTS   — Devanagari input
+    "hig": "af_heart",   # Hinglish TTS — English voice reads Roman script
 }
 
-# ── Dual-voice TTS — separate voice for question vs answer ────────────────────
+# ── Kokoro base speed (fallback when KOKORO_SPEED_BY_LANG not set) ─────────
+KOKORO_SPEED = 0.92
+
+# ── Per-language speed ──────────────────────────────────────────────────────
+# "hig" runs slower — mixed Hindi+English words need more time to be clear.
+# "hi" and "en" keep their existing speeds unchanged.
+KOKORO_SPEED_BY_LANG = {
+    "en":  0.92,
+    "hi":  0.90,
+    "hig": 0.88,   # slower: Hinglish benefits from slightly more breathing room
+}
+
+# ── Dual-voice TTS — separate voice for question vs answer ───────────────
 # Requires TTS_BACKEND = "kokoro". Set to None to disable (uses KOKORO_VOICES).
-#
-# English male:   am_adam  am_michael  am_onyx  am_eric  am_fenrir  am_orion
-# English female: af_heart af_bella  af_nicole  af_sarah  af_sky
-# Hindi male:     hm_omega  hm_psi
-# Hindi female:   hf_alpha  hf_beta
 QA_QUESTION_VOICE = {
-    "en":  "am_adam",      # deep male — interviewer voice
-    "hi":  "hm_omega",
-    "hig": "hm_omega",
+    "en":  "am_adam",     # deep male — interviewer
+    "hi":  "hm_omega",    # Hindi male
+    "hig": "am_adam",     # English male for Hinglish questions
 }
 QA_ANSWER_VOICE = {
-    "en":  "af_heart",     # warm female — expert explaining
-    "hi":  "hf_alpha",
-    "hig": "hf_alpha",
+    "en":  "af_heart",    # warm female — expert explaining
+    "hi":  "hf_alpha",    # Hindi female
+    "hig": "af_heart",    # English female for Hinglish answers
 }
-QA_QUESTION_SPEED = 0.94   # speed for question narration
-QA_ANSWER_SPEED   = 0.90   # slightly slower for answers
+
+# Scalar fallback speeds (used when BY_LANG dicts are absent)
+QA_QUESTION_SPEED = 0.94
+QA_ANSWER_SPEED   = 0.90
+
+# Per-language QA speeds — override the scalars above for each language.
+QA_QUESTION_SPEED_BY_LANG = {
+    "en":  0.94,
+    "hi":  0.92,
+    "hig": 0.90,   # give each word room to be heard clearly
+}
+QA_ANSWER_SPEED_BY_LANG = {
+    "en":  0.90,
+    "hi":  0.88,
+    "hig": 0.87,   # answers are longer and explanation-heavy
+}
 
 XTTS_VOICE_SAMPLE = "assets/clean_voice1.wav"
 
 MACOS_TTS_VOICE = "Samantha"
 MACOS_TTS_VOICES = {
     "hi":  "Lekha",
-    "hig": "Lekha",
+    "hig": "Lekha",    # macOS Lekha handles Romanized Hindi reasonably
     "en":  "Samantha",
 }
 MACOS_TTS_RATE = 125
 
-# Gap between question being spoken and answer starting: 1 second
+# Gap between question and answer
 TTS_PAUSE_BETWEEN_SEGMENTS = 0.3
-TTS_PAUSE_VARY_BY_PUNCTUATION = True  # shorter gap after '.', longer after '...'/'?'/'!' — less mechanical pacing
+TTS_PAUSE_VARY_BY_PUNCTUATION = True
 TTS_PAUSE_BETWEEN_PHRASES  = 0.20
-TTS_ANSWER_PAUSE_EXTRA     = 0.0   # no pause before answer begins
+TTS_ANSWER_PAUSE_EXTRA     = 0.0
 
 # ── Background music bed (optional) ───────────────────────────────────────
 # Off by default. Set BACKGROUND_MUSIC_ENABLED = True and point
@@ -90,7 +108,7 @@ TTS_ANSWER_PAUSE_EXTRA     = 0.0   # no pause before answer begins
 # fights the voice.
 BACKGROUND_MUSIC_ENABLED = True
 BACKGROUND_MUSIC_PATH = "background/cinematic.mp3"
-BACKGROUND_MUSIC_VOLUME_DB = 2.0   # base bed level — raise toward -16 for more presence, lower toward -28 for subtler
+BACKGROUND_MUSIC_VOLUME_DB = 5.0   # base bed level — raise toward -16 for more presence, lower toward -28 for subtler
 BACKGROUND_MUSIC_DUCK_RATIO = 20.0   # how hard music drops under speech — lower toward 6-10 for a gentler duck
 
 AUDIO_POST_PROCESSING = True

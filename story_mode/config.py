@@ -267,8 +267,8 @@ STORY_BG_DIR = "background"
 STORY_BG_SLIDESHOW_XFADE = 0.6
 
 # Common settings for image and video backgrounds:
-STORY_BG_BLUR  = 1            # Gaussian blur radius (0 = no blur)
-STORY_BG_DIM   = 0.9          # Brightness multiplier (0=black, 1=original)
+STORY_BG_BLUR = 0            # Gaussian blur radius (0 = no blur)
+STORY_BG_DIM = 1.0          # Brightness multiplier (0=black, 1=original)
                                 # 0.45 = 55% darker — keeps text legible
 
 # Video background: lumakey settings for removing gradient background

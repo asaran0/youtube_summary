@@ -49,23 +49,9 @@ _DEVANAGARI_CANDIDATES = [
 
 
 def _load_font(size: int, lang: str = "en", hint: str = None) -> ImageFont.FreeTypeFont:
-    candidates = []
-    if hint and os.path.exists(hint):
-        candidates.append(hint)
-    if lang == "en":
-        candidates.extend(_LATIN_CANDIDATES)
-        candidates.extend(_DEVANAGARI_CANDIDATES)
-    else:
-        candidates.extend(_DEVANAGARI_CANDIDATES)
-        candidates.extend(_LATIN_CANDIDATES)
-    for path in candidates:
-        if not path or not os.path.exists(path):
-            continue
-        try:
-            return ImageFont.truetype(path, size=size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
+    """Delegates to core.fonts — uses RAQM shaping for Devanagari."""
+    from core.fonts import get_font
+    return get_font(size, lang=lang, path_hint=hint or "")
 
 
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
@@ -169,9 +155,8 @@ def render_chapter_card(
     font_num   = _load_font(num_size,   lang, font_path)
     font_sub   = _load_font(int(num_size * 0.65), lang, font_path)
 
-    # ── Semi-transparent black panel covering the full frame ─────────────
-    panel = Image.new("RGBA", (w, h), (*bg_col[:3], 210))
-    img   = Image.alpha_composite(img, panel)
+    # No full-screen colour overlay — image/video used as-is.
+    # Draw only a tight semi-transparent box behind the text block.
     draw  = ImageDraw.Draw(img)
 
     # ── Layout: stack vertically around vertical centre ──────────────────
@@ -189,7 +174,26 @@ def render_chapter_card(
         + len(title_lines) * lh_title
         + divider_gap + lh_sub
     )
-    y = (h - total_block_h) // 2
+    y_start = (h - total_block_h) // 2
+    y = y_start
+
+    # ── Tight text-background box (no full-screen overlay) ───────────────
+    # Draws a semi-transparent dark rounded rect only behind the text
+    # so the background image shows freely around it.
+    pad_box_x, pad_box_y = 60, 36
+    box_x1 = int(w * 0.12)
+    box_x2 = int(w * 0.88)
+    box_y1 = y_start - pad_box_y
+    box_y2 = y_start + total_block_h + pad_box_y
+    text_box = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    tb_draw  = ImageDraw.Draw(text_box)
+    tb_draw.rounded_rectangle(
+        [box_x1, box_y1, box_x2, box_y2],
+        radius=20,
+        fill=(*bg_col[:3], 185),    # ~73 % opaque — image still shows through
+    )
+    img = Image.alpha_composite(img, text_box)
+    draw = ImageDraw.Draw(img)
 
     # ── "CHAPTER N" / "अध्याय N" label ──────────────────────────────────
     # Use localised prefix from config if available, otherwise fall back
@@ -212,13 +216,15 @@ def render_chapter_card(
                    fill=(*accent, 255))
     y += divider_h + divider_gap
 
-    # Chapter title lines
+    # Chapter title lines — mixed font (Devanagari vs Latin)
+    from core.fonts import render_mixed_line, measure_mixed_line
     for line in title_lines:
-        lw, _ = _text_size(draw, line, font_title)
-        draw.text(
-            ((w - lw) // 2, y), line, font=font_title,
-            fill=(*txt_col, 255),
-            stroke_width=3, stroke_fill=(0, 0, 0, 200),
+        lw = measure_mixed_line(line, title_size)
+        render_mixed_line(
+            draw, (w - lw) // 2, y, line, title_size,
+            text_color=(*txt_col, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 200),
         )
         y += lh_title
 
@@ -270,13 +276,13 @@ def render_quote_frame(
     stroke_w    = 3
     lang        = getattr(cfg, "LANGUAGE", "en")
 
-    font        = _load_font(quote_size, lang, font_path)
-    dummy_draw  = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    font        = _load_font(quote_size, lang, font_path)   # kept for fallback
     max_text_w  = int(w * 0.74)
-    lh          = _line_height(font) + 10
+    from core.fonts import wrap_mixed_text, measure_mixed_line, render_mixed_line, line_height_for_size
+    lines = wrap_mixed_text(quote_text, quote_size, max_text_w)
+    lh    = line_height_for_size(quote_size) + 4
 
     words = quote_text.split()
-    lines = _wrap_text(quote_text, font, max_text_w, dummy_draw)
     total_block_h = len(lines) * lh
 
     # Box geometry
@@ -304,17 +310,21 @@ def render_quote_frame(
     y = h // 2 - total_block_h // 2
     word_cursor = 0
 
-    for line in lines:
+    for line_idx, line in enumerate(lines):
         line_words = line.split()
-        x = text_x
-        for word in line_words:
-            is_active = (active_word >= 0 and word_cursor == active_word)
-            col = (*hi_col[:3], 255) if is_active else (*txt_col[:3], 255)
-            ww, _ = _text_size(draw, word, font)
-            draw.text((x, y), word, font=font, fill=col,
-                      stroke_width=stroke_w, stroke_fill=(*stroke_col, 255))
-            x += ww + _text_size(draw, " ", font)[0]
-            word_cursor += 1
+        line_active = -1
+        if active_word >= 0 and word_cursor <= active_word < word_cursor + len(line_words):
+            line_active = active_word - word_cursor
+        line_w = measure_mixed_line(line, quote_size)
+        render_mixed_line(
+            draw, text_x, y, line, quote_size,
+            text_color=(*txt_col[:3], 255),
+            highlight_color=(*hi_col[:3], 255),
+            active_word_idx=line_active,
+            stroke_width=stroke_w,
+            stroke_fill=(*stroke_col, 255),
+        )
+        word_cursor += len(line_words)
         y += lh
 
     # Fade
@@ -357,8 +367,10 @@ def render_lesson_frame(
     max_text_w  = int(w * 0.80)
     lh          = _line_height(font) + 12
 
-    lines       = _wrap_text(lesson_text, font, max_text_w, dummy_draw)
-    total_h     = len(lines) * lh
+    from core.fonts import wrap_mixed_text, measure_mixed_line, render_mixed_line, line_height_for_size
+    lines   = wrap_mixed_text(lesson_text, lesson_size, max_text_w)
+    lh      = line_height_for_size(lesson_size) + 6
+    total_h = len(lines) * lh
     pad_x, pad_y = 80, 44
 
     box_x1 = int(w * 0.06)
@@ -384,11 +396,12 @@ def render_lesson_frame(
 
     y = h // 2 - total_h // 2
     for line in lines:
-        lw2, _ = _text_size(draw, line, font)
-        draw.text(
-            ((w - lw2) // 2, y), line, font=font,
-            fill=(*txt_col[:3], 255),
-            stroke_width=3, stroke_fill=(0, 0, 0, 200),
+        lw2 = measure_mixed_line(line, lesson_size)
+        render_mixed_line(
+            draw, (w - lw2) // 2, y, line, lesson_size,
+            text_color=(*txt_col[:3], 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 200),
         )
         y += lh
 

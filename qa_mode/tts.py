@@ -94,9 +94,23 @@ def generate_tts_audio(selected_chunks: list[dict], cfg) -> str:
     strategy = get_strategy(cfg.TTS_BACKEND)
     strategy.check_available(cfg)
 
+    # Per-language speed overrides for QA dual-voice mode.
+    # QA_QUESTION_SPEED_BY_LANG / QA_ANSWER_SPEED_BY_LANG (dicts) take
+    # priority over the scalar QA_QUESTION_SPEED / QA_ANSWER_SPEED so "hig"
+    # can run slightly slower without changing "en" or "hi" behaviour.
+    lang = getattr(cfg, "LANGUAGE", "en")
+    q_speed = (
+            getattr(cfg, "QA_QUESTION_SPEED_BY_LANG", {}).get(lang)
+            or getattr(cfg, "QA_QUESTION_SPEED", None)
+    )
+    a_speed = (
+            getattr(cfg, "QA_ANSWER_SPEED_BY_LANG", {}).get(lang)
+            or getattr(cfg, "QA_ANSWER_SPEED", None)
+    )
+
     # Synthesise questions with question-voice config
-    q_cfg    = _voice_cfg(cfg, q_voices, getattr(cfg, "QA_QUESTION_SPEED", None))
-    a_cfg    = _voice_cfg(cfg, a_voices, getattr(cfg, "QA_ANSWER_SPEED",   None))
+    q_cfg    = _voice_cfg(cfg, q_voices, q_speed)
+    a_cfg    = _voice_cfg(cfg, a_voices, a_speed)
 
     log.info("Synthesising %d question segments …", len(q_texts))
     q_audio  = strategy.synthesize_segments(q_texts, q_cfg) if q_texts else []
@@ -150,8 +164,8 @@ def _voice_cfg(base_cfg, voices: dict | None, speed: float | None):
 
 
 def _inject_answer_pauses(chunks: list[dict],
-                           per_segment_audio: list[dict],
-                           pause_sec: float) -> None:
+                          per_segment_audio: list[dict],
+                          pause_sec: float) -> None:
     """
     Prepend a short silence segment before each answer chunk so there is
     a natural beat between question ending and answer beginning.
@@ -191,7 +205,7 @@ def _dual_cache_key(q_texts: list[str], a_texts: list[str], cfg) -> str:
         str(getattr(cfg, "QA_ANSWER_SPEED", "")),
         "Q:" + "\n".join(q_texts),
         "A:" + "\n".join(a_texts),
-    ])
+        ])
     return hashlib.sha1(payload.encode()).hexdigest()[:12]
 
 
