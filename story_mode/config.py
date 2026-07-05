@@ -207,6 +207,26 @@ FALLBACK_FONT_SEARCH_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 ]
 
+
+# ─────────────────────────────────────────────────────────────
+#  PIXABAY IMAGE BACKGROUNDS
+#  Set STORY_BG_MODE = "pixabay" to auto-download images that
+#  match the story/chapter content from Pixabay.
+#
+#  Free API key: https://pixabay.com/api/docs/  (500 req/hour)
+#
+#  How it works:
+#    1. Keywords extracted per chapter (ebook) or per story segment.
+#    2. Hindi text → English keywords via built-in translation map.
+#    3. Images downloaded, resized, cached in PIXABAY_CACHE_DIR.
+#    4. Re-runs reuse cached images (no re-download).
+#    5. Falls back to gradient if key is missing or network fails.
+# ─────────────────────────────────────────────────────────────
+PIXABAY_API_KEY          = "8DRN6mB3iaPHTQO6mlPM5d9P2lt9l8l3SKGNVqpcn1wfJ3XvmX1UR23c"        # ← paste your free key here
+PIXABAY_IMAGES_PER_QUERY = 3        # images downloaded per chapter/segment
+PIXABAY_CACHE_DIR        = "assets/pixabay_cache"
+PIXABAY_ORIENTATION      = "horizontal"   # "vertical" for reels
+PIXABAY_SAFE_SEARCH      = True
 # ─────────────────────────────────────────────────────────────
 #  DIRECTORIES
 # ─────────────────────────────────────────────────────────────

@@ -73,6 +73,19 @@ def run(text_path: str, title: str = "", cfg=default_cfg,
     safe_title = _safe_title(title)
     target_w, target_h = cfg.video_dimensions()
 
+    # ── Pixabay image download (if configured) ────────────────────────────
+    if getattr(cfg, "STORY_BG_MODE", "gradient").lower() == "pixabay":
+        _step("Downloading Pixabay images for background")
+        from core.pixabay import download_images_for_chunks
+        px_paths = download_images_for_chunks(chunks, cfg, target_w, target_h)
+        if px_paths:
+            cfg.STORY_BG_IMAGES = px_paths
+            cfg.STORY_BG_MODE   = "image"
+            log.info("Pixabay: using %d downloaded images", len(px_paths))
+        else:
+            log.warning("Pixabay download failed or returned no images — falling back to gradient")
+            cfg.STORY_BG_MODE = "gradient"
+
     from ebook_mode.video import compile_ebook_video
     final_video_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}_ebook_summary.mp4")
 

@@ -54,7 +54,7 @@ EBOOK_VOICE_GENDER = "male"   # "male" | "female"
 
 # Slightly slower than natural — book narration needs a measured, considered pace.
 # 0.80 = authoritative; raise toward 0.90 for a faster delivery.
-KOKORO_SPEED = 0.80
+KOKORO_SPEED = 0.90
 
 # Voices per language + gender.
 # English male  : am_adam (deep/authoritative) | am_michael (warm) | am_onyx (rich)
@@ -99,9 +99,9 @@ TTS_PAUSE_BETWEEN_PHRASES     = 0.30
 TTS_ANSWER_PAUSE_EXTRA        = 0.0
 
 # Chapter / lesson / quote breathing room
-EBOOK_CHAPTER_PAUSE     = 2.5   # seconds before a new chapter card
-EBOOK_LESSON_PAUSE      = 1.2   # seconds before a key lesson slide
-EBOOK_QUOTE_PAUSE_AFTER = 1.0   # seconds after a quote
+EBOOK_CHAPTER_PAUSE     = 1.5   # seconds before a new chapter card
+EBOOK_LESSON_PAUSE      = 1   # seconds before a key lesson slide
+EBOOK_QUOTE_PAUSE_AFTER = 0.5   # seconds after a quote
 
 # ─────────────────────────────────────────────────────────────
 #  ON-SCREEN LABEL TRANSLATIONS
@@ -265,6 +265,26 @@ FALLBACK_FONT_SEARCH_PATHS = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
 ]
 
+
+# ─────────────────────────────────────────────────────────────
+#  PIXABAY IMAGE BACKGROUNDS
+#  Set STORY_BG_MODE = "pixabay" to auto-download images that
+#  match the story/chapter content from Pixabay.
+#
+#  Free API key: https://pixabay.com/api/docs/  (500 req/hour)
+#
+#  How it works:
+#    1. Keywords extracted per chapter (ebook) or per story segment.
+#    2. Hindi text → English keywords via built-in translation map.
+#    3. Images downloaded, resized, cached in PIXABAY_CACHE_DIR.
+#    4. Re-runs reuse cached images (no re-download).
+#    5. Falls back to gradient if key is missing or network fails.
+# ─────────────────────────────────────────────────────────────
+PIXABAY_API_KEY          = "8DRN6mB3iaPHTQO6mlPM5d9P2lt9l8l3SKGNVqpcn1wfJ3XvmX1UR23c"        # ← paste your free key here
+PIXABAY_IMAGES_PER_QUERY = 3        # images downloaded per chapter/segment
+PIXABAY_CACHE_DIR        = "assets/pixabay_cache"
+PIXABAY_ORIENTATION      = "horizontal"   # "vertical" for reels
+PIXABAY_SAFE_SEARCH      = True
 # ─────────────────────────────────────────────────────────────
 #  DIRECTORIES & ENCODING
 # ─────────────────────────────────────────────────────────────

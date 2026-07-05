@@ -45,3 +45,6 @@ A: An abstract class can have both abstract methods (without a body) and concret
 
 Q: What is the difference between 'Checked' and 'Unchecked' exceptions?
 A: Checked exceptions are checked by the compiler at compile-time, meaning the developer is forced to handle them using a try-catch block or declare them using the 'throws' keyword (e.g., IOException, SQLException). Unchecked exceptions occur at runtime and are not verified by the compiler during compilation (e.g., NullPointerException, ArithmeticException, ArrayIndexOutOfBoundsException); they usually happen due to programming logic flaws.
+
+
+python main.py --mode qa --file assets/qa.txt --title "java interviews"

@@ -76,7 +76,7 @@ python -m  main.py --mode qa --file assets/sample_interview_qa.txt --title "เคเ
 
 # Override settings per-run without editing config files
 python main.py --mode story --file story.txt --output-mode reel --language hig
-python main.py --mode qa --file qa.txt --tts-backend xtts --voice-sample my_voice.wav
+python main.py --mode qa --file sample_interview_qa.txt --tts-backend xtts --voice-sample my_voice.wav
 ```
 
 ## Language modes
