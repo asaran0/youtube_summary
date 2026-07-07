@@ -255,6 +255,40 @@ def _strip_parens(text: str) -> str:
     return re.sub(r'  +', ' ', result).strip()
 
 
+def _code_to_speech(code_text: str, lang: str = "") -> str:
+    """
+    Lightly normalize ONE line of code before it is sent to the TTS
+    engine, WITHOUT ever changing its word count (the number of
+    whitespace-separated tokens). This constraint matters a lot: the
+    on-screen word-by-word highlight for a code line advances over the
+    SAME whitespace-tokenized text, so inserting or removing a token
+    here (e.g. turning "a.b.c()" into "a dot b dot c") would push every
+    later word in that line — and in every line after it — out of sync
+    with the audio. Every substitution below is character-for-character
+    or multi-char-for-single-char, never adding or removing whitespace.
+
+    What this fixes:
+      - TTS engines treat '.' as END-OF-SENTENCE punctuation, so a
+        method chain like `a.b.c()` gets read back as three broken,
+        oddly-paused fragments instead of one flowing line. Swapping
+        '.' for ',' keeps a natural short pause without the false
+        sentence break.
+      - Doubled comparison/logical operators ("==", "!=", "&&", "||")
+        make some phonemizers stutter the symbol twice; collapsing them
+        to a single character reads far more cleanly.
+    """
+    text = code_text
+    text = text.replace('==', '=')
+    text = text.replace('!=', '!')
+    text = text.replace('&&', '&')
+    text = text.replace('||', '|')
+    text = text.replace('::', ':')
+    # Keeps a natural pause without a false sentence break; also reads
+    # decimals ("3.14") as a brief pause instead of two sentences.
+    text = text.replace('.', ',')
+    return text
+
+
 def _spoken_words(text: str) -> list[str]:
     """Return the word list as TTS will speak them (parens stripped)."""
     return _strip_parens(text).split()
@@ -262,30 +296,66 @@ def _spoken_words(text: str) -> list[str]:
 
 def _format_answer_display(text: str) -> str:
     """
-    Format answer text for visual display:
-    - Preserve parenthetical content (shown on screen)
-    - Insert a blank line (\\n\\n) after every sentence ending (. ? ! ।)
-      so the answer reads as clean paragraphs, not one dense block.
-    - Bullet points (lines starting with - or •) each get their own line.
+    Format raw answer text (with its ORIGINAL line breaks still intact)
+    into display paragraphs.
+
+    Previously this collapsed everything to one line first and then
+    re-split it purely on sentence punctuation. That broke numbered
+    section markers like "6. Method References" — the regex saw the
+    period after "6" as a sentence end and split right there, leaving
+    "6." alone on one line and "Method References" wrapped onto the
+    next.
+
+    Fix: the author's own blank-line boundaries are the strongest
+    signal for "this is its own visual block" (numbered headings,
+    captions like "Benefit:"/"Usage:", bullet groups, etc.) and are
+    preserved as-is instead of being destroyed and guessed back later.
+    Only a block with NO internal author line breaks (a genuine wall of
+    prose) gets sentence-punctuation splitting — and even then, a
+    numbered marker such as "6." or "12." is never treated as a
+    sentence end. Leading -/•/* bullet markers are stripped since the
+    renderer already draws its own bullet glyph per paragraph.
     """
-    # Normalise whitespace first
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    blocks = re.split(r'\n\s*\n', text.strip())
 
-    # Handle bullet points: insert \n\n before each bullet marker (- or •)
-    # so they each appear on their own line
-    text = re.sub(r'\s*[-•]\s+', r'\n\n• ', text)
+    out_blocks = []
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
 
-    # Insert \n\n after sentence-ending punctuation followed by ANY next word
-    # (capital OR lowercase OR Hindi) — not just capitals
-    text = re.sub(
-        r'([.?!।])\s+(?=[A-Za-z\u0900-\u097F])',
-        r'\1\n\n',
-        text,
-    )
+        lines = [ln.strip() for ln in block.split('\n') if ln.strip()]
+        if not lines:
+            continue
 
-    # Clean up: remove leading/trailing blank lines
-    text = text.strip()
-    return text
+        if len(lines) > 1:
+            # Author already split this into several lines. If every
+            # line is a bullet item, keep each as its own paragraph
+            # (marker stripped). Otherwise this is one sentence the
+            # author wrapped only for readability in the source file —
+            # flatten it back into a single flowing line.
+            if all(re.match(r'^[-•*]\s+', ln) for ln in lines):
+                cleaned = [re.sub(r'^[-•*]\s+', '', ln) for ln in lines]
+                out_blocks.append('\n\n'.join(cleaned))
+                continue
+            block = ' '.join(lines)
+        else:
+            block = re.sub(r'^[-•*]\s+', '', lines[0])
+
+        block = re.sub(r'\s+', ' ', block).strip()
+        # Insert \n\n after sentence-ending punctuation followed by ANY
+        # next word (capital OR lowercase OR Hindi) — but never right
+        # after a numbered marker like "6." (digit immediately before
+        # the punctuation).
+        block = re.sub(
+            r'(?<!\d)([.?!।])\s+(?=[A-Za-z\u0900-\u097F])',
+            r'\1\n\n',
+            block,
+        )
+        out_blocks.append(block)
+
+    return '\n\n'.join(out_blocks).strip()
 
 
 # ── Main loader ───────────────────────────────────────────────────────────────
@@ -395,7 +465,14 @@ def load_qa_file(path: str, cfg) -> list[dict]:
                 code_text = code_text.strip()
                 if not code_text:
                     continue
-                spoken_chunks.append(code_text)  # speak the command like normal text
+                # Speak a TTS-friendly normalized version (dots -> "dot",
+                # camelCase split into words, braces/semicolons dropped,
+                # etc.) — see _code_to_speech for why. The RAW code_text
+                # is still what's shown on screen, untouched, so the
+                # visual card looks exactly like the source code.
+                spoken_form = _code_to_speech(code_text, lang)
+                if spoken_form:
+                    spoken_chunks.append(spoken_form)
                 prefix = _CODE_LINE_MARK + pos + _FIELD_SEP + (lang or "") + _FIELD_SEP
                 display_chunks.append(prefix + code_text)
             elif kind == "comment":
@@ -417,11 +494,20 @@ def load_qa_file(path: str, cfg) -> list[dict]:
                 # logic), and flags this paragraph for callout styling.
                 display_chunks.append(f"{_EXPLAIN_MARKER} {collapsed}")
             else:
-                collapsed = " ".join(content.split())
+                # Strip leading bullet markers per line before flattening
+                # for speech — otherwise the TTS tries to read "*"/"-"/"•"
+                # aloud literally ("asterisk", etc).
+                bullet_stripped = "\n".join(
+                    re.sub(r'^[ \t]*[-•*]\s+', '', ln) for ln in content.split('\n')
+                )
+                collapsed = " ".join(bullet_stripped.split())
                 if not collapsed:
                     continue
                 spoken_chunks.append(_strip_parens(collapsed))
-                display_chunks.append(_format_answer_display(collapsed))
+                # Pass the ORIGINAL (uncollapsed) content — _format_answer_display
+                # needs the author's real line breaks to know where numbered
+                # headings/bullets/captions begin and end.
+                display_chunks.append(_format_answer_display(content))
 
         spoken_text  = " ".join(c for c in spoken_chunks if c)
         display_text = "\n\n".join(c for c in display_chunks if c)

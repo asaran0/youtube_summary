@@ -632,7 +632,11 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
             body = para[1:]
             pos, lang, row_text = body.split("\u0014", 2)
             mono_font = _get_mono_font(max(16, int(_line_height(font) * 0.62)))
-            wrapped = _wrap_text_px(row_text, mono_font, max_width) or [""]
+            # Use the whitespace-preserving wrapper for code — the prose
+            # wrapper (_wrap_text_px) does `text.split()` + " ".join,
+            # which silently destroys leading indentation and collapses
+            # internal spacing, flattening every code line's formatting.
+            wrapped = _wrap_code_line_px(row_text, mono_font, max_width) or [""]
             for j, ln in enumerate(wrapped):
                 # Only the FIRST wrapped sub-line carries the row's real
                 # pos (for header/rounding); extra wrapped sub-lines (rare —
@@ -651,6 +655,125 @@ def _wrap_paragraphs(text: str, font, max_width: int) -> list:
         lines = _wrap_text_px(para, font, max_width)
         result.extend(lines)
     return result or [""]
+
+
+def _wrap_code_line_px(text: str, font, max_width: int) -> list[str]:
+    """
+    Wrap ONE code line for on-screen display WITHOUT collapsing
+    whitespace. Unlike the prose wrapper (_wrap_text_px, which does
+    `text.split()` then rejoins with single spaces), this keeps leading
+    indentation and internal spacing byte-for-byte — otherwise every
+    code card renders flattened to a single indentation level
+    regardless of the source. Most code lines fit on one row; long
+    ones are only broken at whitespace boundaries, and the break never
+    eats the whitespace itself.
+    """
+    from qa_mode.qa_slideshow import _text_width
+    from PIL import Image, ImageDraw
+
+    if not text:
+        return [""]
+
+    dummy = Image.new("RGB", (1, 1))
+    draw = ImageDraw.Draw(dummy)
+
+    if _text_width(draw, text, font) <= max_width:
+        return [text]
+
+    tokens = re.findall(r'\S+|\s+', text)
+    lines: list[str] = []
+    current = ""
+    for tok in tokens:
+        trial = current + tok
+        if current.strip() and _text_width(draw, trial, font) > max_width:
+            lines.append(current.rstrip())
+            current = tok if tok.strip() else ""
+        else:
+            current = trial
+    if current.strip():
+        lines.append(current.rstrip())
+    return lines or [text]
+
+
+# ── Lightweight syntax highlighting (IntelliJ/Darcula-ish palette) ─────────
+# Not a real lexer — good enough for short interview-answer snippets where
+# every "word" is already whitespace/punctuation-token sized.
+
+_KEYWORDS_BY_LANG: dict[str, set] = {
+    "java": {
+        "public", "private", "protected", "class", "interface", "extends",
+        "implements", "static", "final", "void", "new", "return", "if",
+        "else", "for", "while", "do", "switch", "case", "break", "continue",
+        "try", "catch", "finally", "throw", "throws", "import", "package",
+        "this", "super", "null", "true", "false", "abstract", "enum",
+        "default", "synchronized", "volatile", "transient", "instanceof",
+        "int", "long", "short", "byte", "char", "boolean", "float",
+        "double", "var",
+    },
+    "python": {
+        "def", "class", "return", "if", "elif", "else", "for", "while",
+        "try", "except", "finally", "with", "as", "import", "from",
+        "pass", "break", "continue", "lambda", "yield", "global",
+        "nonlocal", "assert", "raise", "in", "is", "not", "and", "or",
+        "None", "True", "False", "self", "async", "await",
+    },
+    "javascript": {
+        "function", "return", "if", "else", "for", "while", "var", "let",
+        "const", "new", "class", "extends", "this", "null", "undefined",
+        "true", "false", "import", "export", "default", "try", "catch",
+        "finally", "throw", "async", "await",
+    },
+    "sql": {
+        "select", "from", "where", "insert", "into", "values", "update",
+        "set", "delete", "join", "inner", "left", "right", "on", "group",
+        "by", "order", "having", "create", "table", "and", "or", "not",
+        "null", "as", "limit",
+    },
+    "bash": {
+        "if", "then", "else", "fi", "for", "do", "done", "while", "case",
+        "esac", "function", "return", "exit", "export", "local", "echo",
+    },
+}
+_KEYWORDS_BY_LANG["py"] = _KEYWORDS_BY_LANG["python"]
+_KEYWORDS_BY_LANG["js"] = _KEYWORDS_BY_LANG["javascript"]
+_KEYWORDS_BY_LANG["sh"] = _KEYWORDS_BY_LANG["bash"]
+_KEYWORDS_BY_LANG["shell"] = _KEYWORDS_BY_LANG["bash"]
+
+_SYNTAX_COLORS = {
+    "keyword":    (204, 120, 50),   # orange   — if/return/class/public...
+    "annotation": (187, 181, 41),   # yellow   — @Override
+    "string":     (106, 135, 89),   # green    — "text"
+    "number":     (104, 151, 187),  # blue     — 42 / 3.14
+    "type":       (169, 183, 198),  # light grey-blue — Capitalised identifiers
+}
+
+
+def _classify_code_token(tok: str, lang: str) -> str:
+    """Classify ONE whitespace-delimited code token for colouring."""
+    core = tok.strip()
+    if not core:
+        return "default"
+    if core.startswith("@"):
+        return "annotation"
+    bare = core.strip("(),;:{}[]<>")
+    if not bare:
+        return "default"
+    if len(bare) >= 2 and bare[0] == bare[-1] and bare[0] in ('"', "'", "`"):
+        return "string"
+    if re.fullmatch(r'-?\d+(\.\d+)?[fFlLdD]?', bare):
+        return "number"
+    lang_key = (lang or "").lower()
+    word = re.sub(r'[^\w]', '', bare)
+    if word in _KEYWORDS_BY_LANG.get(lang_key, ()):
+        return "keyword"
+    if word and word[0].isupper() and lang_key in ("java", "javascript", "js", "python", "py"):
+        return "type"
+    return "default"
+
+
+def _token_color(tok: str, lang: str, default_color: tuple) -> tuple:
+    kind = _classify_code_token(tok, lang)
+    return _SYNTAX_COLORS.get(kind, default_color)
 
 
 def _decode_code_block_lines(encoded: str) -> list[str]:
@@ -752,14 +875,39 @@ def _char_weighted_word_idx(progress: float, spoken_words: list) -> int:
     so a 10-letter word occupies ~2x the time of a 5-letter word.
     This makes the highlight track the voice far more accurately than
     the old `int(progress * n_words)` uniform approach.
+
+    Two refinements on top of plain character count, both aimed at the
+    "text runs ahead of the audio" drift reported on long, code-heavy
+    answers:
+      - Punctuation/symbol characters (common in code: "();", "==",
+        "{") are weighted at a fraction of a letter's weight — a TTS
+        engine spends far less real time on a run of symbols than on
+        the same number of alphanumeric characters, so counting them
+        at full weight overestimates their speaking time and causes
+        the highlight to linger on code far longer than the audio
+        actually does.
+      - A word ending a sentence gets a small extra weight credit to
+        account for the natural breath pause there, which plain
+        character count otherwise ignores.
+    Both are per-word heuristics (no data-model changes), so they
+    reduce — but, without real per-word TTS timestamps, cannot fully
+    eliminate — drift over a long answer.
     """
     if not spoken_words:
         return 0
-    # Build cumulative char weights (min 1 per word to avoid zero-width words)
-    lengths = [max(1, len(w)) for w in spoken_words]
-    total   = sum(lengths)
-    target  = progress * total
-    cumul   = 0
+
+    lengths = []
+    for w in spoken_words:
+        alnum  = sum(1 for ch in w if ch.isalnum())
+        symbol = len(w) - alnum
+        weight = alnum + symbol * 0.35
+        if w and w[-1] in '.?!।':
+            weight += 2.0
+        lengths.append(max(1.0, weight))
+
+    total  = sum(lengths)
+    target = progress * total
+    cumul  = 0.0
     for i, ln in enumerate(lengths):
         cumul += ln
         if cumul >= target:
@@ -842,7 +990,7 @@ def _draw_code_line(draw, marker: str, x0: int, y: int, video_width: int,
     "\\u0001CL\\u0001{pos}\\u0001{lang}\\u0001{line_text}" where pos is
     one of first/mid/last/only. Returns the new y cursor.
     """
-    from qa_mode.qa_slideshow import _text_width, _line_height
+    from qa_mode.qa_slideshow import _text_width, _line_height, _text_tokens
 
     body = marker[len("\u0001CL\u0001"):]
     pos, lang, line_text = body.split("\u0001", 2)
@@ -882,7 +1030,11 @@ def _draw_code_line(draw, marker: str, x0: int, y: int, video_width: int,
         return y  # out of room — caller already guards this, just be safe
     _rounded_rect(draw, [x0, y, x0 + card_w, y + row_h], radius,
                   fill=card_bg, corners=(False, False, bottom_rounded, bottom_rounded))
-    draw.text((x0 + pad_x, y + 7), line_text, font=font, fill=text_color)
+    x = x0 + pad_x
+    for token in _text_tokens(line_text):
+        color = _token_color(token, lang, text_color)
+        draw.text((x, y + 7), token, font=font, fill=color)
+        x += _text_width(draw, token, font)
     return y + row_h
 
 
@@ -958,7 +1110,6 @@ def _draw_code_walkthrough_row(draw, role: str, pos: str, lang: str, row_text: s
     _rounded_rect(draw, [x0, y, x0 + card_w, y + row_h], radius,
                   fill=card_bg, corners=(top_rounded, top_rounded, bot_rounded, bot_rounded))
 
-    base_color = comment_color if role == "comment" else code_color
     x = x0 + pad_x
     if role == "comment":
         prefix = _comment_prefix(lang)
@@ -967,7 +1118,15 @@ def _draw_code_walkthrough_row(draw, role: str, pos: str, lang: str, row_text: s
 
     for token in _text_tokens(row_text):
         is_word = bool(token.strip())
-        color = highlight_color if (is_word and word_index == active_word) else base_color
+        if is_word and word_index == active_word:
+            color = highlight_color
+        elif role == "comment":
+            color = comment_color
+        else:
+            # Per-token syntax colour (keywords/strings/numbers/types),
+            # falling back to the plain code colour — like IntelliJ's
+            # default dark theme instead of one flat colour for everything.
+            color = _token_color(token, lang, code_color)
         draw.text((x, y + 7), token, font=font, fill=color)
         x += _text_width(draw, token, font)
         if is_word:

@@ -57,7 +57,7 @@ def compile_ebook_video(
       B — Overlay waveform animation (ffmpeg screen-blend)
       C — Mux audio (with optional background music ducking)
     """
-    from moviepy import AudioFileClip, VideoClip
+    from moviepy.editor import AudioFileClip, VideoClip
 
     lang        = getattr(cfg, "LANGUAGE", "en")
     fade_dur    = float(getattr(cfg, "STORY_SENTENCE_FADE", 0.20))
@@ -317,10 +317,9 @@ def compile_ebook_video(
         "-stream_loop", "-1",
         "-i", wf_loop,
         "-filter_complex",
-        "[0:v]format=rgb24[base];"
-        "[1:v]format=rgb24[wf];"
-        "[base][wf]blend=all_mode=screen[v];"
-        "[v]format=yuv420p[out]",
+        "[0:v]format=yuv420p[base];"
+        "[1:v]format=yuv420p[wf];"
+        "[base][wf]blend=all_mode=screen[out]",
         "-map", "[out]",
         "-c:v", cfg.VIDEO_CODEC,
         "-preset", "fast", "-crf", "18",

@@ -283,6 +283,22 @@ def _build_query_plan(chunks: list[dict], lang: str, images_per_query: int) -> l
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
+def _load_cache_fallback(cache_dir: str, video_w: int, video_h: int) -> list[str]:
+    """
+    Return all already-resized JPEG images from cache_dir.
+    Used when the API is unavailable so existing cached images are not wasted.
+    Images are returned in filename order (consistent across runs).
+    """
+    if not os.path.isdir(cache_dir):
+        return []
+    paths = sorted(
+        str(p) for p in Path(cache_dir).glob("*.jpg")
+        if p.stat().st_size > 1024  # skip corrupt/empty stubs
+    )
+    log.info("Pixabay cache fallback: found %d images in %s", len(paths), cache_dir)
+    return paths
+
+
 def download_images_for_chunks(
     chunks: list[dict],
     cfg,
@@ -299,12 +315,15 @@ def download_images_for_chunks(
     fall back to gradient mode gracefully.
     """
     api_key = getattr(cfg, "PIXABAY_API_KEY", "").strip()
+    cache_dir = getattr(cfg, "PIXABAY_CACHE_DIR", "assets/pixabay_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+
     if not api_key or api_key in ("your_key_here", "YOUR_KEY_HERE", ""):
         log.warning(
             "PIXABAY_API_KEY not set. Get a free key at https://pixabay.com/api/docs/ "
-            "and add it to your config."
+            "and add it to your config. Trying cache fallback..."
         )
-        return []
+        return _load_cache_fallback(cache_dir, video_w, video_h)
 
     lang              = getattr(cfg, "LANGUAGE", "en")
     images_per_query  = int(getattr(cfg, "PIXABAY_IMAGES_PER_QUERY", 3))
@@ -355,4 +374,7 @@ def download_images_for_chunks(
             time.sleep(0.3)   # polite delay between downloads
 
     log.info("Pixabay: %d images ready in %s", len(paths), cache_dir)
+    if not paths:
+        log.warning("Pixabay returned no images — using existing cache as fallback")
+        paths = _load_cache_fallback(cache_dir, video_w, video_h)
     return paths

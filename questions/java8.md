@@ -1,22 +1,23 @@
-Q1: What are the major features introduced in Java 8? (Asked in TCS, Infosys, Accenture, Cognizant, Capgemini, Wipro, EPAM)
+Yes. For Shorts/Reels, keep one question = one concept = 45-60 seconds. Use this format:
+
+**0-5 sec:** Question
+**5-10 sec:** One-line definition
+**10-40 sec:** Simple example
+**40-55 sec:** Interview tip
+**55-60 sec:** Quick recap
+
+---
+
+Q1: What is a Lambda Expression? (Asked in TCS, Infosys, Accenture, Cognizant, Capgemini)
 
 A:
 
-Java 8 was one of the biggest releases of Java. It introduced several features that made Java code simpler, more readable, and easier to maintain.
-
-The major features introduced in Java 8 are:
-
-1. Lambda Expressions
-
-* Used to write anonymous functions.
-* Reduces boilerplate code.
-* Mostly used with Collections and Stream API.
+A Lambda Expression is an anonymous function introduced in Java 8. It lets us write behavior in a shorter and cleaner way.
 
 Before Java 8:
 
-```java
+```java id="9u9dzh"
 Runnable r = new Runnable() {
-    @Override
     public void run() {
         System.out.println("Hello");
     }
@@ -25,36 +26,77 @@ Runnable r = new Runnable() {
 
 Java 8:
 
-```java
+```java id="yg1j0g"
 Runnable r = () -> System.out.println("Hello");
 ```
 
-Benefit:
-We can write the same logic in fewer lines with better readability.
+Real-world example:
 
-2. Functional Interfaces
+Suppose you want to print all employee names from a list. Instead of creating separate classes, you can simply use lambda expressions.
 
-* An interface having only one abstract method.
-* Can be implemented using Lambda Expressions.
+Interview Tip:
+
+Whenever you see code that represents behavior or logic, think about Lambda Expressions.
+
+Quick Recap:
+
+"Lambda Expression is an anonymous function that reduces boilerplate code and makes Java code more readable."
+
+---
+
+## Q2: What is a Functional Interface? (Asked in TCS, Infosys, Wipro, Accenture, EPAM)
+
+**A:**
+
+A Functional Interface is an interface that contains exactly one abstract method.
 
 Example:
 
-```java
+```java id="c4j0ow"
 @FunctionalInterface
 interface Calculator {
     int add(int a, int b);
 }
 ```
 
-3. Stream API
+Implementation:
 
-* Provides a functional way to process collections.
-* Supports filtering, mapping, sorting, and aggregation.
+```java id="86eqf0"
+Calculator c = (a, b) -> a + b;
+System.out.println(c.add(10, 20));
+```
+
+Output:
+
+```text id="otkv1s"
+30
+```
+
+Real-world example:
+
+Runnable, Comparator, and Callable are all Functional Interfaces.
+
+Interview Tip:
+
+Lambda Expressions work only with Functional Interfaces.
+
+Quick Recap:
+
+"A Functional Interface has only one abstract method and is mainly used with Lambda Expressions."
+
+---
+
+## Q3: What is Stream API? (Asked in TCS, Infosys, Capgemini, Cognizant, Accenture)
+
+**A:**
+
+Stream API is a feature in Java 8 that processes collections in a functional and declarative way.
 
 Example:
 
-```java
-List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5);
+```java id="f7up3f"
+List<Integer> numbers =
+        Arrays.asList(1,2,3,4,5);
 
 numbers.stream()
        .filter(n -> n % 2 == 0)
@@ -63,71 +105,76 @@ numbers.stream()
 
 Output:
 
-```text
+```text id="i3jkn1"
 2
 4
 ```
 
-Benefit:
-Code becomes cleaner and easier to understand.
+Real-world example:
 
-4. Default Methods in Interfaces
+Suppose you have 10,000 employees and need names of employees earning more than 50,000. Stream API can filter and process the data in one line.
 
-* Interfaces can contain implemented methods.
-* Helps in adding new methods without breaking existing implementations.
+Interview Tip:
 
-Example:
+Remember that Stream does not store data. It only processes data from a source.
 
-```java
-interface Vehicle {
-    default void start() {
-        System.out.println("Vehicle Started");
-    }
-}
-```
+Quick Recap:
 
-5. Static Methods in Interfaces
+"Stream API provides filtering, mapping, sorting, and aggregation with less code and better readability."
 
-Example:
+---
 
-```java
-interface MathUtil {
-    static int square(int n) {
-        return n * n;
-    }
-}
-```
+## Q4: What is the difference between Collection and Stream? (Asked in Infosys, TCS, Accenture, Capgemini, EPAM)
 
-Usage:
+**A:**
 
-```java
-MathUtil.square(5);
-```
+Collection stores data.
 
-6. Method References
-
-* A shorter form of lambda expressions.
+Stream processes data.
 
 Example:
 
-```java
-list.forEach(System.out::println);
+```java id="m4u7ye"
+List<String> names =
+        Arrays.asList("Ram", "Shyam");
+
+Stream<String> stream =
+        names.stream();
 ```
 
-Instead of:
+Collection:
 
-```java
-list.forEach(x -> System.out.println(x));
-```
+* Stores elements
+* Can add and remove data
+* Can be traversed multiple times
 
-7. Optional Class
+Stream:
 
-* Helps avoid NullPointerException.
-* Represents a value that may or may not be present.
+* Does not store data
+* Performs operations on data
+* Can be consumed only once
+
+Interview Tip:
+
+Collection is like a warehouse that stores products. Stream is like a conveyor belt that processes products.
+
+Quick Recap:
+
+"Collection stores data, whereas Stream processes data."
+
+---
+
+Q5: What is Optional in Java 8? (Asked in TCS, Infosys, Cognizant, Wipro, Accenture)
+
+A:
+
+Optional is a container object that may or may not contain a value.
+
+It was introduced to reduce NullPointerException.
 
 Example:
 
-```java
+```java id="6m5wy5"
 Optional<String> name =
         Optional.ofNullable(null);
 
@@ -137,24 +184,18 @@ System.out.println(
 
 Output:
 
-```text
+```text id="jll9b8"
 Guest
 ```
 
-8. Date and Time API
+Real-world example:
 
-* Introduced immutable date and time classes.
+Suppose a user profile may not have a middle name. Instead of returning null, we can return Optional.
 
-Example:
+Interview Tip:
 
-```java
-LocalDate today = LocalDate.now();
-LocalTime time = LocalTime.now();
+Optional doesn't eliminate null completely, but it forces developers to handle missing values safely.
 
-System.out.println(today);
-System.out.println(time);
-```
+Quick Recap:
 
-Interview Answer:
-
-"Java 8 introduced Lambda Expressions, Functional Interfaces, Stream API, Method References, Optional Class, Default and Static Methods in Interfaces, and the new Date-Time API. These features support functional programming and help developers write cleaner, more maintainable, and less error-prone code."
+"Optional is a wrapper object introduced to avoid NullPointerException and handle missing values gracefully."

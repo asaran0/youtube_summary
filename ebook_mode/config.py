@@ -167,20 +167,20 @@ AUDIO_FILTER = _AUDIO_FILTER_HI if LANGUAGE in ("hi", "hig") else _AUDIO_FILTER_
 # ─────────────────────────────────────────────────────────────
 #  BACKGROUND MUSIC
 # ─────────────────────────────────────────────────────────────
-BACKGROUND_MUSIC_ENABLED    = False
-BACKGROUND_MUSIC_PATH       = "assets/ebook_ambient.mp3"
-BACKGROUND_MUSIC_VOLUME_DB  = -24.0
+BACKGROUND_MUSIC_ENABLED    = True
+BACKGROUND_MUSIC_PATH       = "background/cinematic.mp3"
+BACKGROUND_MUSIC_VOLUME_DB  = 2.0
 BACKGROUND_MUSIC_DUCK_RATIO = 20.0
 
 # ─────────────────────────────────────────────────────────────
 #  BACKGROUND VISUALS
 # ─────────────────────────────────────────────────────────────
 STORY_BG_MODE   = "image"
-STORY_BG_IMAGE  = "background/ebook_bg.png"
+# STORY_BG_IMAGE  = "background/reel_bg.png"
 STORY_BG_IMAGES = []
 STORY_BG_VIDEO  = ""
 STORY_BG_VIDEOS = []
-STORY_BG_DIR    = "background"
+STORY_BG_DIR    = "assets/pixabay_cache"
 
 STORY_BG_BLUR = 0
 STORY_BG_DIM = 1.0
