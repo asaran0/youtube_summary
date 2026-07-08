@@ -37,7 +37,7 @@ LANGUAGE = "hi"
 # ─────────────────────────────────────────────────────────────
 # "full" → landscape 1920×1080 for regular YouTube (best for long-form)
 # "reel" → vertical 1080×1920 for Shorts / Reels
-OUTPUT_MODE    = "full"
+OUTPUT_MODE    = "reel"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -285,6 +285,17 @@ PIXABAY_IMAGES_PER_QUERY = 3        # images downloaded per chapter/segment
 PIXABAY_CACHE_DIR        = "assets/pixabay_cache"
 PIXABAY_ORIENTATION      = "horizontal"   # "vertical" for reels
 PIXABAY_SAFE_SEARCH      = True
+
+# ─────────────────────────────────────────────────────────────
+#  SLIDESHOW SETTINGS (used when STORY_BG_MODE = "image")
+#  With multiple images, a smooth Ken Burns + xfade slideshow
+#  is pre-rendered before the main video build.
+# ─────────────────────────────────────────────────────────────
+SLIDESHOW_SLOT_DUR    = 7.0   # seconds each image is shown before transitioning
+SLIDESHOW_XFADE_DUR   = 1.8   # seconds of smooth cross-fade between images
+# Images are shuffled randomly and cycle continuously regardless of chapter.
+# Lower SLIDESHOW_SLOT_DUR for a faster-paced feel (min ~4.0).
+# Raise SLIDESHOW_XFADE_DUR for longer dissolves (max ~SLIDESHOW_SLOT_DUR/2).
 # ─────────────────────────────────────────────────────────────
 #  DIRECTORIES & ENCODING
 # ─────────────────────────────────────────────────────────────

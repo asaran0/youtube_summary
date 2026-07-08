@@ -83,11 +83,49 @@ def run(text_path: str, title: str = "", cfg=default_cfg,
             cfg.STORY_BG_MODE   = "image"
             log.info("Pixabay: using %d downloaded images", len(px_paths))
         else:
-            log.warning("Pixabay download failed or returned no images — falling back to gradient")
+            log.warning("Pixabay download failed — falling back to gradient")
             cfg.STORY_BG_MODE = "gradient"
+
+    # ── Pre-render smooth slideshow if image mode with multiple images ────
+    # Builds a beautiful Ken Burns + xfade slideshow video ONCE using ffmpeg,
+    # then make_frame() just reads frames from it — much smoother and faster
+    # than PIL per-frame rendering.
+    slideshow_path = ""
+    if getattr(cfg, "STORY_BG_MODE", "gradient").lower() == "image":
+        from core.slideshow import resolve_image_dir, build_slideshow_video
+        img_paths = resolve_image_dir(cfg)
+        if len(img_paths) > 1:
+            _step("Pre-rendering background slideshow (Ken Burns + smooth transitions)")
+            sl_out = os.path.join(cfg.TEMP_DIR, f"{safe_title}_slideshow.mp4")
+            os.makedirs(cfg.TEMP_DIR, exist_ok=True)
+            slideshow_path = build_slideshow_video(
+                image_paths=img_paths,
+                output_path=sl_out,
+                total_duration=total_dur,
+                video_w=target_w,
+                video_h=target_h,
+                cfg=cfg,
+                shuffle=True,
+            )
+            if slideshow_path:
+                log.info("Slideshow ready (%d images) → %s", len(img_paths), slideshow_path)
+            else:
+                log.warning("Slideshow render failed — static image fallback")
+        elif len(img_paths) == 1:
+            log.info("Single image background: %s", img_paths[0])
 
     from ebook_mode.video import compile_ebook_video
     final_video_path = os.path.join(cfg.OUTPUT_DIR, f"{safe_title}_ebook_summary.mp4")
+
+    print(f"DEBUG bg_mode={getattr(cfg,'STORY_BG_MODE','?')}")
+    print(f"DEBUG BG_DIR={getattr(cfg,'STORY_BG_DIR','?')}")
+    print(f"DEBUG BG_IMAGES={getattr(cfg,'STORY_BG_IMAGES',[])}")
+    # import os
+    bg_dir = getattr(cfg,'STORY_BG_DIR','background')
+    # if os.path.isdir(bg_dir):
+    #     print(f"DEBUG images in dir: {os.listdir(bg_dir)}")
+    # else:
+    print(f"DEBUG dir does not exist: {bg_dir}")
 
     compile_ebook_video(
         chunks=chunks,
@@ -98,6 +136,7 @@ def run(text_path: str, title: str = "", cfg=default_cfg,
         font_path=font_path,
         cfg=cfg,
         book_title=book_title,
+        slideshow_path=slideshow_path,
     )
 
     # ── SRT subtitle file ─────────────────────────────────────────────────
