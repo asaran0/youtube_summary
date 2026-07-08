@@ -37,7 +37,7 @@ LANGUAGE = "hi"
 # ─────────────────────────────────────────────────────────────
 # "full" → landscape 1920×1080 for regular YouTube (best for long-form)
 # "reel" → vertical 1080×1920 for Shorts / Reels
-OUTPUT_MODE    = "reel"
+OUTPUT_MODE    = "full"
 
 YOUTUBE_WIDTH  = 1920
 YOUTUBE_HEIGHT = 1080
@@ -54,7 +54,7 @@ EBOOK_VOICE_GENDER = "male"   # "male" | "female"
 
 # Slightly slower than natural — book narration needs a measured, considered pace.
 # 0.80 = authoritative; raise toward 0.90 for a faster delivery.
-KOKORO_SPEED = 0.90
+KOKORO_SPEED = 0.98
 
 # Voices per language + gender.
 # English male  : am_adam (deep/authoritative) | am_michael (warm) | am_onyx (rich)
@@ -93,15 +93,15 @@ MMS_TTS_MODEL_IDS = {
 }
 
 # Pacing — generous gaps so the listener can absorb each idea.
-TTS_PAUSE_BETWEEN_SEGMENTS    = 0.55
-TTS_PAUSE_VARY_BY_PUNCTUATION = True   # longer after ? ! …
-TTS_PAUSE_BETWEEN_PHRASES     = 0.30
+TTS_PAUSE_BETWEEN_SEGMENTS    = 0.1
+TTS_PAUSE_VARY_BY_PUNCTUATION = False   # longer after ? ! …
+TTS_PAUSE_BETWEEN_PHRASES     = 0.0
 TTS_ANSWER_PAUSE_EXTRA        = 0.0
 
 # Chapter / lesson / quote breathing room
-EBOOK_CHAPTER_PAUSE     = 1.5   # seconds before a new chapter card
-EBOOK_LESSON_PAUSE      = 1   # seconds before a key lesson slide
-EBOOK_QUOTE_PAUSE_AFTER = 0.5   # seconds after a quote
+EBOOK_CHAPTER_PAUSE     = 0.5   # seconds before a new chapter card
+EBOOK_LESSON_PAUSE      = 0.2  # seconds before a key lesson slide
+EBOOK_QUOTE_PAUSE_AFTER = 0.1   # seconds after a quote
 
 # ─────────────────────────────────────────────────────────────
 #  ON-SCREEN LABEL TRANSLATIONS
@@ -169,8 +169,8 @@ AUDIO_FILTER = _AUDIO_FILTER_HI if LANGUAGE in ("hi", "hig") else _AUDIO_FILTER_
 # ─────────────────────────────────────────────────────────────
 BACKGROUND_MUSIC_ENABLED    = True
 BACKGROUND_MUSIC_PATH       = "background/cinematic.mp3"
-BACKGROUND_MUSIC_VOLUME_DB  = 2.0
-BACKGROUND_MUSIC_DUCK_RATIO = 20.0
+BACKGROUND_MUSIC_VOLUME_DB  = -10.0
+BACKGROUND_MUSIC_DUCK_RATIO = 10.0
 
 # ─────────────────────────────────────────────────────────────
 #  BACKGROUND VISUALS
