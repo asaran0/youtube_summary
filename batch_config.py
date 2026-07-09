@@ -19,17 +19,17 @@ and its own metadata file listing exactly which questions are in that part.
 QUESTIONS_FILE = "assets/sample_interview_qa.txt"
 
 # How many Q&A pairs to include in each part video.
-QUESTIONS_PER_PART = 1
+QUESTIONS_PER_PART = 20
 
 # Base name used for output filenames and video titles.
 # e.g.  "java_basics"  →  java_basics_part1_qa.mp4, java_basics_part2_qa.mp4
-BATCH_TITLE = "Java 8 Interview Questions Answers mostly asked in HCL TCS Infosys"
+BATCH_TITLE = "Python Freshers Interview Questions Answers mostly asked in HCL TCS EPAM IBM"
 
 # ── Output ───────────────────────────────────────────────────────────────────
 
 # Where finished videos and metadata are written.
 # Overrides qa_mode/config.py OUTPUT_DIR for this batch run.
-OUTPUT_DIR = "output/qa/java"
+OUTPUT_DIR = "output/qa/python_basics_full"
 
 # ── Optional overrides (set to None to use qa_mode/config.py defaults) ───────
 
@@ -37,7 +37,7 @@ OUTPUT_DIR = "output/qa/java"
 LANGUAGE = "en"
 
 # "reel" (1080×1920 vertical) | "full" (1920×1080 landscape) — None = default
-OUTPUT_MODE = "reel"
+OUTPUT_MODE = "full"
 
 # "macos" | "xtts" | "mms" — None = use config default
 TTS_BACKEND = "kokoro"
